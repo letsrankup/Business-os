@@ -1,9 +1,5 @@
-// lib/openrouter.ts
-// OpenRouter = FREE AI models (Gemini, Llama, Mistral etc.)
-// Compatible with OpenAI SDK format
-
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const MODEL = "mistralai/mistral-7b-instruct:free"; // 100% free model
+const MODEL = "meta-llama/llama-3.1-8b-instruct:free";
 
 async function chat(
   messages: { role: string; content: string }[],
@@ -50,7 +46,6 @@ function cleanJSON(text: string): any {
       .replace(/```json/gi, "")
       .replace(/```/gi, "")
       .trim();
-    // Find first { or [ in case model adds preamble
     const start = cleaned.search(/[\[{]/);
     if (start === -1) throw new Error("No JSON found");
     return JSON.parse(cleaned.slice(start));
@@ -59,88 +54,63 @@ function cleanJSON(text: string): any {
   }
 }
 
-// ─── SEO Audit ────────────────────────────────────────────────
 export async function generateAuditReport(url: string) {
   const text = await chat([
     {
       role: "system",
-      content:
-        "You are an expert SEO auditor. Always respond with pure valid JSON only. No markdown, no explanation.",
+      content: "You are an expert SEO auditor. Always respond with pure valid JSON only. No markdown, no explanation.",
     },
     {
       role: "user",
       content: `Analyze website: ${url}
-
-Return this exact JSON structure:
+Return this exact JSON:
 {
   "score": 75,
   "performance": 80,
   "seo": 72,
   "accessibility": 88,
-  "summary": "2-3 sentence SEO health summary.",
+  "summary": "2-3 sentence summary.",
   "issues": ["issue1","issue2","issue3","issue4","issue5"],
   "recommendations": ["rec1","rec2","rec3","rec4"],
   "keywords": ["kw1","kw2","kw3","kw4","kw5","kw6"]
 }`,
     },
   ]);
-
   const parsed = cleanJSON(text);
   if (parsed) return parsed;
-
-  // Safe fallback
   return {
     score: 70, performance: 72, seo: 68, accessibility: 80,
-    summary: "Analysis complete. See details below.",
-    issues: ["Meta description missing", "Images lack alt tags", "Page speed could be improved", "Mobile responsiveness needs check", "Internal linking structure weak"],
-    recommendations: ["Add meta descriptions", "Optimize images with alt tags", "Improve page load speed", "Build more internal links"],
-    keywords: ["website", "online", "business", "service", "professional", "quality"],
+    summary: "Analysis complete.",
+    issues: ["Meta description missing","Images lack alt tags","Page speed slow","Mobile needs check","Internal linking weak"],
+    recommendations: ["Add meta descriptions","Optimize images","Improve speed","Build internal links"],
+    keywords: ["website","online","business","service","professional","quality"],
   };
 }
 
-// ─── Content Generation ───────────────────────────────────────
-interface ContentParams {
+export async function generateContent(params: {
   contentType: string;
   topic: string;
   tone: string;
   keywords: string[];
   targetAudience: string;
   wordCount?: number;
-}
-
-const typeGuide: Record<string, string> = {
-  blog: "Write a full SEO blog article with H2/H3 headers, intro, body sections, and conclusion.",
-  linkedin: "Write a LinkedIn post with a strong hook, value insight, and CTA. Use short paragraphs. Add 3-5 hashtags.",
-  email: "Write an email with: Subject line, Preview text, Body (hook → value → CTA), Sign-off.",
-  ad: "Write 3 ads: [FACEBOOK] headline+body, [GOOGLE] 3 headlines+description, [INSTAGRAM] caption+hashtags.",
-  product: "Write a product description (150 words): opening, 3 benefits, social proof, CTA.",
-  social: "Write 3 posts: [TWITTER] under 280 chars, [INSTAGRAM] with hashtags, [FACEBOOK] conversational.",
-};
-
-export async function generateContent(params: ContentParams): Promise<string> {
+}): Promise<string> {
   const { contentType, topic, tone, keywords, targetAudience, wordCount = 600 } = params;
-
+  const typeGuide: Record<string, string> = {
+    blog: "Write a full SEO blog article with H2/H3 headers.",
+    linkedin: "Write a LinkedIn post with hook, value, CTA and hashtags.",
+    email: "Write email with Subject, Preview, Body, Sign-off.",
+    ad: "Write 3 ads: Facebook, Google, Instagram.",
+    product: "Write product description 150 words with benefits and CTA.",
+    social: "Write 3 posts for Twitter, Instagram, Facebook.",
+  };
   return chat([
-    {
-      role: "system",
-      content: `You are a world-class ${tone} copywriter. Write compelling, natural content.`,
-    },
-    {
-      role: "user",
-      content: `Task: ${typeGuide[contentType] || `Write ${contentType} content (~${wordCount} words).`}
-
-Topic: ${topic}
-Tone: ${tone}
-Audience: ${targetAudience || "General audience"}
-Keywords: ${keywords.join(", ") || "none"}
-
-Write now:`,
-    },
+    { role: "system", content: `You are a world-class ${tone} copywriter.` },
+    { role: "user", content: `Task: ${typeGuide[contentType] || `Write ${contentType} content.`}\nTopic: ${topic}\nTone: ${tone}\nAudience: ${targetAudience}\nKeywords: ${keywords.join(", ")}\n\nWrite now:` },
   ]);
 }
 
-// ─── Proposal Generator ───────────────────────────────────────
-interface ProposalParams {
+export async function generateProposal(params: {
   clientName: string;
   clientBusiness?: string;
   projectType: string;
@@ -149,77 +119,30 @@ interface ProposalParams {
   timeline?: string;
   yourName?: string;
   yourCompany?: string;
-}
-
-export async function generateProposal(params: ProposalParams): Promise<string> {
+}): Promise<string> {
   const { clientName, clientBusiness, projectType, projectDescription, budget, timeline, yourName, yourCompany } = params;
-
   return chat([
-    {
-      role: "system",
-      content: "You are a senior business consultant writing winning project proposals.",
-    },
-    {
-      role: "user",
-      content: `Write a professional proposal for:
-
-Client: ${clientName}${clientBusiness ? ` (${clientBusiness})` : ""}
-Project: ${projectType}
-Description: ${projectDescription}
-Budget: ${budget || "To be discussed"}
-Timeline: ${timeline || "To be agreed"}
-From: ${yourName || "Our Team"}, ${yourCompany || "Our Company"}
-
-Include these sections:
-1. EXECUTIVE SUMMARY
-2. PROJECT UNDERSTANDING  
-3. SCOPE OF WORK
-4. TIMELINE & MILESTONES
-5. INVESTMENT
-6. WHY CHOOSE US
-7. NEXT STEPS
-
-Make it professional and persuasive.`,
-    },
+    { role: "system", content: "You are a senior business consultant writing winning proposals." },
+    { role: "user", content: `Write proposal for:\nClient: ${clientName}${clientBusiness ? ` (${clientBusiness})` : ""}\nProject: ${projectType}\nDescription: ${projectDescription}\nBudget: ${budget || "TBD"}\nTimeline: ${timeline || "TBD"}\nFrom: ${yourName || "Our Team"}, ${yourCompany || "Our Company"}\n\nInclude: Executive Summary, Scope, Timeline, Investment, Why Us, Next Steps.` },
   ]);
 }
 
-// ─── Lead Discovery ───────────────────────────────────────────
-interface LeadsParams {
+export async function discoverLeads(params: {
   query: string;
   industry: string;
   count: number;
-}
-
-export async function discoverLeads(params: LeadsParams) {
+}) {
   const { query, industry, count } = params;
-
   const text = await chat([
-    {
-      role: "system",
-      content: "You are a B2B sales intelligence specialist. Return pure valid JSON only. No markdown.",
-    },
-    {
-      role: "user",
-      content: `Generate ${count} business leads for:
-Target: ${query}
-Industry: ${industry}
-
-Return a JSON array:
-[{"name":"Full Name","company":"Company","role":"Title","email":"email@co.com","website":"https://co.com","industry":"${industry}","score":85,"description":"Why good lead"}]
-
-Scores: 85-98=hot, 70-84=warm, 60-69=cold. Make realistic but fictional data.`,
-    },
+    { role: "system", content: "You are a B2B sales specialist. Return pure valid JSON only." },
+    { role: "user", content: `Generate ${count} leads for:\nTarget: ${query}\nIndustry: ${industry}\n\nReturn JSON array:\n[{"name":"Full Name","company":"Company","role":"Title","email":"email@co.com","website":"https://co.com","industry":"${industry}","score":85,"description":"Why good lead"}]` },
   ]);
-
   const parsed = cleanJSON(text);
   if (Array.isArray(parsed)) return parsed;
   if (parsed?.leads) return parsed.leads;
-
-  // Fallback sample leads
   return [
-    { name: "Sarah Johnson", company: "TechFlow Inc", role: "CEO", email: "sarah@techflow.com", website: "https://techflow.com", industry, score: 92, description: "Fast-growing SaaS company actively seeking marketing solutions." },
-    { name: "Ahmed Raza", company: "Digital Ventures", role: "Marketing Director", email: "ahmed@digitalv.com", website: "https://digitalv.com", industry, score: 78, description: "Established firm looking to expand digital presence." },
-    { name: "Priya Sharma", company: "StartupHub", role: "Founder", email: "priya@startuphub.io", website: "https://startuphub.io", industry, score: 85, description: "Early-stage startup with budget for growth services." },
+    { name: "Sarah Johnson", company: "TechFlow Inc", role: "CEO", email: "sarah@techflow.com", website: "https://techflow.com", industry, score: 92, description: "Fast-growing company seeking marketing solutions." },
+    { name: "Ahmed Raza", company: "Digital Ventures", role: "Marketing Director", email: "ahmed@digitalv.com", website: "https://digitalv.com", industry, score: 78, description: "Established firm expanding digital presence." },
+    { name: "Priya Sharma", company: "StartupHub", role: "Founder", email: "priya@startuphub.io", website: "https://startuphub.io", industry, score: 85, description: "Startup with budget for growth services." },
   ];
-}
+    }
