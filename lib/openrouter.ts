@@ -4,7 +4,7 @@
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
 // ✅ Yeh model abhi FREE hai OpenRouter pe
-const MODEL = "google/gemma-3-4b-it:free";
+const MODEL = "openrouter/auto";
 
 async function chat(
   messages: { role: string; content: string }[],
