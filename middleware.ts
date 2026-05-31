@@ -1,70 +1,47 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+const PROTECTED = [
+  "/dashboard",
+  "/audit",
+  "/content",
+  "/proposal",
+  "/leads",
+  "/crm",
+  "/settings",
+];
+
+const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
+
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  });
+  const { pathname } = request.nextUrl;
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          request.cookies.set({ name, value, ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          });
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          request.cookies.set({ name, value: "", ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          });
-          response.cookies.set({ name, value: "", ...options });
-        },
-      },
-    }
-  );
+  // Check session cookie
+  const token =
+    request.cookies.get("sb-access-token")?.value ||
+    request.cookies.get(
+      `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.split("//")[1]?.split(".")[0]}-auth-token`
+    )?.value;
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const isLoggedIn = !!token;
+  const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
+  const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
 
-  // Protected routes — login required
-  const protectedRoutes = [
-    "/dashboard",
-    "/audit",
-    "/content",
-    "/proposal",
-    "/leads",
-    "/crm",
-    "/settings",
-  ];
-
-  const isProtected = protectedRoutes.some((route) =>
-    request.nextUrl.pathname.startsWith(route)
-  );
-
-  // Agar protected route hai aur login nahi — login page pe bhejo
-  if (isProtected && !session) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  // Not logged in → redirect to login
+  if (isProtected && !isLoggedIn) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
   }
 
-  // Agar already logged in hai aur login/signup pe gaya — dashboard pe bhejo
-  if (
-    session &&
-    (request.nextUrl.pathname === "/login" ||
-      request.nextUrl.pathname === "/signup")
-  ) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // Already logged in → redirect to dashboard
+  if (isAuthPage && isLoggedIn) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
@@ -78,5 +55,6 @@ export const config = {
     "/settings/:path*",
     "/login",
     "/signup",
+    "/forgot-password",
   ],
 };
