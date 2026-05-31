@@ -19,6 +19,7 @@ export default function LoginPage() {
     try {
       await signIn(email, password);
       router.push("/dashboard");
+      router.refresh();
     } catch (err: any) {
       setError(err.message || "Login failed. Please try again.");
     } finally {
@@ -27,6 +28,7 @@ export default function LoginPage() {
   };
 
   const handleGoogle = async () => {
+    setError("");
     try {
       await signInWithGoogle();
     } catch (err: any) {
@@ -36,44 +38,44 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4 font-mono">
-      {/* Background glow */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full bg-[#00f5a0]/5 blur-[120px]" />
       </div>
 
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
+          <Link href="/" className="inline-flex items-center gap-2 mb-4">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f5a0] to-[#00d9f5] flex items-center justify-center font-black text-black text-sm">
               AI
             </div>
             <span className="text-white font-bold text-xl">Business OS</span>
-          </div>
+          </Link>
           <h1 className="text-2xl font-black text-white">Welcome Back</h1>
           <p className="text-gray-400 text-sm mt-1">Apne account mein login karo</p>
         </div>
 
         {/* Card */}
         <div className="bg-[#12121a] border border-white/10 rounded-2xl p-6 space-y-4">
-
-          {/* Google Login */}
+          {/* Google */}
           <button
             onClick={handleGoogle}
+            type="button"
             className="w-full flex items-center justify-center gap-3 py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-all"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
             Google se Login karo
           </button>
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-white/10" />
-            <span className="text-gray-600 text-xs">ya</span>
+            <span className="text-gray-600 text-xs">ya email se</span>
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
@@ -87,6 +89,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tumhara@email.com"
                 required
+                autoComplete="email"
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#00f5a0]/50 transition-all text-sm"
               />
             </div>
@@ -104,6 +107,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                autoComplete="current-password"
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#00f5a0]/50 transition-all text-sm"
               />
             </div>
@@ -119,19 +123,18 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-3 rounded-xl bg-[#00f5a0] text-black font-bold text-sm hover:bg-[#00f5a0]/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {loading ? "Logging in..." : "Login →"}
+              {loading ? "Login ho raha hai..." : "Login karo →"}
             </button>
           </form>
         </div>
 
-        {/* Signup link */}
         <p className="text-center text-sm text-gray-500 mt-4">
           Account nahi hai?{" "}
           <Link href="/signup" className="text-[#00f5a0] hover:underline font-medium">
-            Sign Up karo
+            Free Sign Up karo
           </Link>
         </p>
       </div>
     </div>
   );
-}
+    }
