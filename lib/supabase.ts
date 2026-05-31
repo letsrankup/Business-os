@@ -1,21 +1,21 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Browser client — Client Components mein use karo
-export const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Auth Functions
+// Main client
+export const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
 
 // Signup
-export async function signUp(email: string, password: string, fullName: string) {
+export async function signUp(
+  email: string,
+  password: string,
+  fullName: string
+) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: {
-      data: { full_name: fullName },
-    },
+    options: { data: { full_name: fullName } },
   });
   if (error) throw error;
   return data;
@@ -33,11 +33,11 @@ export async function signIn(email: string, password: string) {
 
 // Google Login
 export async function signInWithGoogle() {
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: {
-      redirectTo: `${window.location.origin}/dashboard`,
-    },
+    options: { redirectTo: `${origin}/dashboard` },
   });
   if (error) throw error;
   return data;
@@ -55,15 +55,12 @@ export async function getCurrentUser() {
   return user;
 }
 
-// Password Reset Email
+// Password Reset
 export async function resetPassword(email: string) {
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/reset-password`,
+    redirectTo: `${origin}/reset-password`,
   });
   if (error) throw error;
-}
-
-// Client helper
-export function createClient() {
-  return createClient(supabaseUrl, supabaseKey);
 }
