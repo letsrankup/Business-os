@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
       await resetPassword(email);
       setSent(true);
     } catch (err: any) {
-      setError(err.message || "Failed to send reset email.");
+      setError(err.message || "Failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -26,35 +26,36 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4 font-mono">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full bg-[#00f5a0]/5 blur-[100px]" />
       </div>
 
       <div className="relative w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
+          <Link href="/" className="inline-flex items-center gap-2 mb-4">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f5a0] to-[#00d9f5] flex items-center justify-center font-black text-black text-sm">
               AI
             </div>
             <span className="text-white font-bold text-xl">Business OS</span>
-          </div>
+          </Link>
           <h1 className="text-2xl font-black text-white">Password Reset</h1>
-          <p className="text-gray-400 text-sm mt-1">Email daalo — link bhej denge</p>
+          <p className="text-gray-400 text-sm mt-1">Email daalo — reset link bhej denge</p>
         </div>
 
         <div className="bg-[#12121a] border border-white/10 rounded-2xl p-6">
           {sent ? (
-            <div className="text-center space-y-4">
+            <div className="text-center space-y-4 py-4">
               <div className="text-5xl">📧</div>
-              <p className="text-white font-bold">Email Bhej Di!</p>
+              <p className="text-white font-bold">Reset Link Bhej Di!</p>
               <p className="text-gray-400 text-sm">
-                <span className="text-[#00f5a0]">{email}</span> pe reset link bheja gaya hai.
+                <span className="text-[#00f5a0]">{email}</span> pe link bheja gaya hai.
+                Email check karo.
               </p>
               <Link
                 href="/login"
                 className="block w-full py-3 rounded-xl bg-[#00f5a0] text-black font-bold text-sm text-center hover:bg-[#00f5a0]/80 transition-all"
               >
-                Login Pe Wapis Jao
+                Login Pe Wapis Jao →
               </Link>
             </div>
           ) : (
@@ -67,6 +68,7 @@ export default function ForgotPasswordPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="tumhara@email.com"
                   required
+                  autoComplete="email"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#00f5a0]/50 transition-all text-sm"
                 />
               </div>
@@ -94,4 +96,4 @@ export default function ForgotPasswordPage() {
       </div>
     </div>
   );
-}
+      }
