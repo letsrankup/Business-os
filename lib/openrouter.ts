@@ -1,5 +1,10 @@
+// lib/openrouter.ts
+// Using Google Gemma — 100% FREE on OpenRouter
+
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const MODEL = "meta-llama/llama-3.1-8b-instruct:free";
+
+// ✅ Yeh model abhi FREE hai OpenRouter pe
+const MODEL = "google/gemma-3-4b-it:free";
 
 async function chat(
   messages: { role: string; content: string }[],
@@ -31,10 +36,10 @@ async function chat(
       const data = await res.json();
       const text = data?.choices?.[0]?.message?.content || "";
       if (text.length > 5) return text;
-      throw new Error("Empty response from model");
+      throw new Error("Empty response");
     } catch (err: any) {
       if (i === retries - 1) throw err;
-      await new Promise((r) => setTimeout(r, (i + 1) * 1200));
+      await new Promise((r) => setTimeout(r, (i + 1) * 1500));
     }
   }
   throw new Error("All retries failed");
@@ -54,16 +59,14 @@ function cleanJSON(text: string): any {
   }
 }
 
+// ─── SEO Audit ────────────────────────────────────────────────
 export async function generateAuditReport(url: string) {
   const text = await chat([
     {
-      role: "system",
-      content: "You are an expert SEO auditor. Always respond with pure valid JSON only. No markdown, no explanation.",
-    },
-    {
       role: "user",
-      content: `Analyze website: ${url}
-Return this exact JSON:
+      content: `You are an SEO expert. Analyze website: ${url}
+
+Reply with ONLY valid JSON, no explanation, no markdown:
 {
   "score": 75,
   "performance": 80,
@@ -76,41 +79,74 @@ Return this exact JSON:
 }`,
     },
   ]);
+
   const parsed = cleanJSON(text);
   if (parsed) return parsed;
+
   return {
-    score: 70, performance: 72, seo: 68, accessibility: 80,
-    summary: "Analysis complete.",
-    issues: ["Meta description missing","Images lack alt tags","Page speed slow","Mobile needs check","Internal linking weak"],
-    recommendations: ["Add meta descriptions","Optimize images","Improve speed","Build internal links"],
-    keywords: ["website","online","business","service","professional","quality"],
+    score: 70,
+    performance: 72,
+    seo: 68,
+    accessibility: 80,
+    summary: "Analysis complete. Review the details below.",
+    issues: [
+      "Meta description missing or too short",
+      "Images missing alt attributes",
+      "Page load speed needs improvement",
+      "Mobile responsiveness issues detected",
+      "Internal linking structure is weak",
+    ],
+    recommendations: [
+      "Add unique meta descriptions to all pages",
+      "Optimize all images with descriptive alt tags",
+      "Enable browser caching and compress assets",
+      "Build strategic internal links between pages",
+    ],
+    keywords: ["website", "online", "business", "service", "professional", "quality"],
   };
 }
 
-export async function generateContent(params: {
+// ─── Content Generation ───────────────────────────────────────
+interface ContentParams {
   contentType: string;
   topic: string;
   tone: string;
   keywords: string[];
   targetAudience: string;
   wordCount?: number;
-}): Promise<string> {
+}
+
+const typeGuide: Record<string, string> = {
+  blog: "Write a full SEO blog article with H2/H3 headers, intro, 3-5 body sections, and conclusion.",
+  linkedin: "Write a LinkedIn post with strong hook, value insight, short paragraphs, CTA, and 3-5 hashtags.",
+  email: "Write email with: Subject line, Preview text, Body (hook, value, CTA), Sign-off.",
+  ad: "Write 3 ads: [FACEBOOK] headline+body, [GOOGLE] 3 headlines+description, [INSTAGRAM] caption+hashtags.",
+  product: "Write product description (150 words): opening, 3 benefits, social proof, CTA.",
+  social: "Write 3 posts: [TWITTER] under 280 chars, [INSTAGRAM] with hashtags, [FACEBOOK] conversational.",
+};
+
+export async function generateContent(params: ContentParams): Promise<string> {
   const { contentType, topic, tone, keywords, targetAudience, wordCount = 600 } = params;
-  const typeGuide: Record<string, string> = {
-    blog: "Write a full SEO blog article with H2/H3 headers.",
-    linkedin: "Write a LinkedIn post with hook, value, CTA and hashtags.",
-    email: "Write email with Subject, Preview, Body, Sign-off.",
-    ad: "Write 3 ads: Facebook, Google, Instagram.",
-    product: "Write product description 150 words with benefits and CTA.",
-    social: "Write 3 posts for Twitter, Instagram, Facebook.",
-  };
+
   return chat([
-    { role: "system", content: `You are a world-class ${tone} copywriter.` },
-    { role: "user", content: `Task: ${typeGuide[contentType] || `Write ${contentType} content.`}\nTopic: ${topic}\nTone: ${tone}\nAudience: ${targetAudience}\nKeywords: ${keywords.join(", ")}\n\nWrite now:` },
+    {
+      role: "user",
+      content: `You are a world-class ${tone} copywriter.
+
+Task: ${typeGuide[contentType] || `Write ${contentType} content (~${wordCount} words).`}
+
+Topic: ${topic}
+Tone: ${tone}
+Audience: ${targetAudience || "General audience"}
+Keywords: ${keywords.join(", ") || "none"}
+
+Write the content now:`,
+    },
   ]);
 }
 
-export async function generateProposal(params: {
+// ─── Proposal Generator ───────────────────────────────────────
+interface ProposalParams {
   clientName: string;
   clientBusiness?: string;
   projectType: string;
@@ -119,30 +155,111 @@ export async function generateProposal(params: {
   timeline?: string;
   yourName?: string;
   yourCompany?: string;
-}): Promise<string> {
-  const { clientName, clientBusiness, projectType, projectDescription, budget, timeline, yourName, yourCompany } = params;
+}
+
+export async function generateProposal(params: ProposalParams): Promise<string> {
+  const {
+    clientName, clientBusiness, projectType,
+    projectDescription, budget, timeline,
+    yourName, yourCompany,
+  } = params;
+
   return chat([
-    { role: "system", content: "You are a senior business consultant writing winning proposals." },
-    { role: "user", content: `Write proposal for:\nClient: ${clientName}${clientBusiness ? ` (${clientBusiness})` : ""}\nProject: ${projectType}\nDescription: ${projectDescription}\nBudget: ${budget || "TBD"}\nTimeline: ${timeline || "TBD"}\nFrom: ${yourName || "Our Team"}, ${yourCompany || "Our Company"}\n\nInclude: Executive Summary, Scope, Timeline, Investment, Why Us, Next Steps.` },
+    {
+      role: "user",
+      content: `Write a professional project proposal for:
+
+Client: ${clientName}${clientBusiness ? ` (${clientBusiness})` : ""}
+Project: ${projectType}
+Description: ${projectDescription}
+Budget: ${budget || "To be discussed"}
+Timeline: ${timeline || "To be agreed"}
+From: ${yourName || "Our Team"}, ${yourCompany || "Our Company"}
+
+Include these sections:
+1. EXECUTIVE SUMMARY
+2. PROJECT UNDERSTANDING
+3. SCOPE OF WORK
+4. TIMELINE & MILESTONES
+5. INVESTMENT
+6. WHY CHOOSE US
+7. NEXT STEPS
+
+Write it professionally and persuasively.`,
+    },
   ]);
 }
 
-export async function discoverLeads(params: {
+// ─── Lead Discovery ───────────────────────────────────────────
+interface LeadsParams {
   query: string;
   industry: string;
   count: number;
-}) {
+}
+
+export async function discoverLeads(params: LeadsParams) {
   const { query, industry, count } = params;
+
   const text = await chat([
-    { role: "system", content: "You are a B2B sales specialist. Return pure valid JSON only." },
-    { role: "user", content: `Generate ${count} leads for:\nTarget: ${query}\nIndustry: ${industry}\n\nReturn JSON array:\n[{"name":"Full Name","company":"Company","role":"Title","email":"email@co.com","website":"https://co.com","industry":"${industry}","score":85,"description":"Why good lead"}]` },
+    {
+      role: "user",
+      content: `You are a B2B sales expert. Generate ${count} business leads.
+
+Target: ${query}
+Industry: ${industry}
+
+Reply with ONLY a valid JSON array, no explanation, no markdown:
+[
+  {
+    "name": "Full Name",
+    "company": "Company Name",
+    "role": "Job Title",
+    "email": "email@company.com",
+    "website": "https://company.com",
+    "industry": "${industry}",
+    "score": 85,
+    "description": "Why this is a good lead"
+  }
+]
+
+Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
+    },
   ]);
+
   const parsed = cleanJSON(text);
   if (Array.isArray(parsed)) return parsed;
   if (parsed?.leads) return parsed.leads;
+
   return [
-    { name: "Sarah Johnson", company: "TechFlow Inc", role: "CEO", email: "sarah@techflow.com", website: "https://techflow.com", industry, score: 92, description: "Fast-growing company seeking marketing solutions." },
-    { name: "Ahmed Raza", company: "Digital Ventures", role: "Marketing Director", email: "ahmed@digitalv.com", website: "https://digitalv.com", industry, score: 78, description: "Established firm expanding digital presence." },
-    { name: "Priya Sharma", company: "StartupHub", role: "Founder", email: "priya@startuphub.io", website: "https://startuphub.io", industry, score: 85, description: "Startup with budget for growth services." },
+    {
+      name: "Sarah Johnson",
+      company: "TechFlow Inc",
+      role: "CEO",
+      email: "sarah@techflow.com",
+      website: "https://techflow.com",
+      industry,
+      score: 92,
+      description: "Fast-growing company actively seeking marketing solutions.",
+    },
+    {
+      name: "Ahmed Raza",
+      company: "Digital Ventures",
+      role: "Marketing Director",
+      email: "ahmed@digitalv.com",
+      website: "https://digitalv.com",
+      industry,
+      score: 78,
+      description: "Established firm looking to expand digital presence.",
+    },
+    {
+      name: "Priya Sharma",
+      company: "StartupHub",
+      role: "Founder",
+      email: "priya@startuphub.io",
+      website: "https://startuphub.io",
+      industry,
+      score: 85,
+      description: "Early-stage startup with budget for growth services.",
+    },
   ];
-    }
+          }
