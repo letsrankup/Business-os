@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase, signOut } from "@/lib/supabase";
 
 const nav = [
   { label: "Dashboard", href: "/dashboard", icon: "⚡" },
@@ -14,7 +16,23 @@ const nav = [
 
 export default function Sidebar({ open = true }: { open?: boolean }) {
   const path = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push("/login");
+  };
+
   if (!open) return null;
+
+  const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
+  const userEmail = user?.email || "";
+  const userInitial = userName[0]?.toUpperCase() || "U";
 
   return (
     <aside className="w-60 bg-[#0d0d14] border-r border-white/5 flex flex-col flex-shrink-0 h-screen sticky top-0">
@@ -50,18 +68,25 @@ export default function Sidebar({ open = true }: { open?: boolean }) {
         })}
       </nav>
 
-      {/* Bottom user */}
-      <div className="p-3 border-t border-white/5">
+      {/* User + Logout */}
+      <div className="p-3 border-t border-white/5 space-y-2">
         <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00f5a0] to-[#00d9f5] flex items-center justify-center font-bold text-black text-xs">
-            U
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00f5a0] to-[#00d9f5] flex items-center justify-center font-bold text-black text-xs flex-shrink-0">
+            {userInitial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-white truncate">User</p>
-            <p className="text-[10px] text-gray-500">Free Plan</p>
+            <p className="text-xs font-bold text-white truncate">{userName}</p>
+            <p className="text-[10px] text-gray-500 truncate">{userEmail}</p>
           </div>
         </div>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all text-xs"
+        >
+          <span>🚪</span>
+          <span>Logout</span>
+        </button>
       </div>
     </aside>
   );
-                }
+}
