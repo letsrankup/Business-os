@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 interface InvoiceItem {
   id: number;
@@ -10,43 +11,36 @@ interface InvoiceItem {
 
 interface Invoice {
   id: string;
-  clientName: string;
-  clientEmail: string;
+  client_name: string;
+  client_email: string;
   items: InvoiceItem[];
   status: "paid" | "unpaid" | "pending";
   date: string;
-  dueDate: string;
+  due_date: string;
 }
 
 export default function InvoicePage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([
-    {
-      id: "INV-001",
-      clientName: "Ahmed Ali",
-      clientEmail: "ahmed@example.com",
-      items: [{ id: 1, description: "SEO Services", quantity: 1, price: 500 }],
-      status: "paid",
-      date: "2026-05-01",
-      dueDate: "2026-05-15",
-    },
-    {
-      id: "INV-002",
-      clientName: "Sara Khan",
-      clientEmail: "sara@example.com",
-      items: [{ id: 1, description: "Content Writing", quantity: 3, price: 150 }],
-      status: "unpaid",
-      date: "2026-05-20",
-      dueDate: "2026-06-05",
-    },
-  ]);
-
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([
     { id: 1, description: "", quantity: 1, price: 0 },
   ]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, []);
+
+  const fetchInvoices = async () => {
+    const { data } = await supabase
+      .from("invoices")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) setInvoices(data);
+  };
 
   const addItem = () => {
     setItems([...items, { id: items.length + 1, description: "", quantity: 1, price: 0 }]);
@@ -60,27 +54,32 @@ export default function InvoicePage() {
     return invoiceItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
   };
 
-  const createInvoice = () => {
+  const createInvoice = async () => {
     if (!clientName || !dueDate) return;
-    const newInvoice: Invoice = {
-      id: `INV-00${invoices.length + 1}`,
-      clientName,
-      clientEmail,
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("invoices").insert({
+      user_id: user?.id,
+      client_name: clientName,
+      client_email: clientEmail,
       items,
       status: "pending",
-      date: new Date().toISOString().split("T")[0],
-      dueDate,
-    };
-    setInvoices([newInvoice, ...invoices]);
-    setShowForm(false);
-    setClientName("");
-    setClientEmail("");
-    setDueDate("");
-    setItems([{ id: 1, description: "", quantity: 1, price: 0 }]);
+      due_date: dueDate,
+    });
+    if (!error) {
+      await fetchInvoices();
+      setShowForm(false);
+      setClientName("");
+      setClientEmail("");
+      setDueDate("");
+      setItems([{ id: 1, description: "", quantity: 1, price: 0 }]);
+    }
+    setLoading(false);
   };
 
-  const updateStatus = (id: string, status: "paid" | "unpaid" | "pending") => {
-    setInvoices(invoices.map((inv) => inv.id === id ? { ...inv, status } : inv));
+  const updateStatus = async (id: string, status: "paid" | "unpaid" | "pending") => {
+    await supabase.from("invoices").update({ status }).eq("id", id);
+    await fetchInvoices();
   };
 
   const totalRevenue = invoices.filter(i => i.status === "paid").reduce((sum, i) => sum + getTotal(i.items), 0);
@@ -89,8 +88,6 @@ export default function InvoicePage() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white p-6 font-mono">
       <div className="max-w-5xl mx-auto">
-
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-black text-white">💰 Invoice & Billing</h1>
@@ -104,7 +101,6 @@ export default function InvoicePage() {
           </button>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="bg-[#12121a] border border-white/10 rounded-2xl p-4">
             <p className="text-gray-400 text-xs mb-1">Total Received</p>
@@ -116,7 +112,6 @@ export default function InvoicePage() {
           </div>
         </div>
 
-        {/* New Invoice Form */}
         {showForm && (
           <div className="bg-[#12121a] border border-[#00f5a0]/30 rounded-2xl p-6 mb-8">
             <h2 className="text-lg font-bold mb-4">New Invoice Banao</h2>
@@ -149,8 +144,6 @@ export default function InvoicePage() {
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-[#00f5a0]/50"
               />
             </div>
-
-            {/* Items */}
             <div className="mb-4">
               <label className="text-xs text-gray-400 mb-2 block">Services / Items</label>
               {items.map((item) => (
@@ -158,8 +151,8 @@ export default function InvoicePage() {
                   <input
                     value={item.description}
                     onChange={(e) => updateItem(item.id, "description", e.target.value)}
-                    placeholder="Service description"
-                    className="col-span-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none"
+                    placeholder="Service"
+                    className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none"
                   />
                   <input
                     type="number"
@@ -181,29 +174,30 @@ export default function InvoicePage() {
                 + Add Item
               </button>
             </div>
-
             <div className="flex items-center justify-between">
               <p className="text-white font-bold">Total: ${getTotal(items).toLocaleString()}</p>
               <div className="flex gap-2">
                 <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-xl border border-white/10 text-gray-400 text-sm">
                   Cancel
                 </button>
-                <button onClick={createInvoice} className="px-4 py-2 rounded-xl bg-[#00f5a0] text-black font-bold text-sm">
-                  Create Invoice
+                <button onClick={createInvoice} disabled={loading} className="px-4 py-2 rounded-xl bg-[#00f5a0] text-black font-bold text-sm disabled:opacity-50">
+                  {loading ? "Saving..." : "Create Invoice"}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Invoice List */}
         <div className="space-y-4">
+          {invoices.length === 0 && (
+            <div className="text-center text-gray-500 py-12">Koi invoice nahi — pehla invoice banao!</div>
+          )}
           {invoices.map((invoice) => (
             <div key={invoice.id} className="bg-[#12121a] border border-white/10 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="font-bold text-white">{invoice.clientName}</p>
-                  <p className="text-gray-400 text-xs">{invoice.id} • Due: {invoice.dueDate}</p>
+                  <p className="font-bold text-white">{invoice.client_name}</p>
+                  <p className="text-gray-400 text-xs">Due: {invoice.due_date}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <p className="text-[#00f5a0] font-bold">${getTotal(invoice.items).toLocaleString()}</p>
@@ -236,4 +230,4 @@ export default function InvoicePage() {
       </div>
     </div>
   );
-               }
+             }
