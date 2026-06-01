@@ -12,7 +12,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // React.FormEvent bina generic html restriction ke lagaya hai takay build pass ho
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
@@ -20,7 +19,7 @@ export default function LoginPage() {
     setError("");
     try {
       await signIn(email, password);
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : "Login failed. Please try again.";
       setError(errMsg);
@@ -132,4 +131,4 @@ export default function LoginPage() {
       </div>
     </div>
   );
-              }
+  }
