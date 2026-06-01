@@ -104,7 +104,7 @@ const Tag = ({ text, type = "neutral" }) => {
     </div>
   );
 };
-export default function CompetitorAnalysisPro() {
+        export default function CompetitorAnalysisPro() {
   const [yourSite, setYourSite] = useState("");
   const [compSite, setCompSite] = useState("");
   const [industry, setIndustry] = useState("");
@@ -357,7 +357,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       setLoading(false);
     }
   };
-  const threatColor = (level) =>
+        const threatColor = (level) =>
     level === "High" ? "#ef4444" : level === "Medium" ? "#f59e0b" : "#22c55e";
 
   const tabColor = (id) => {
@@ -706,8 +706,9 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
           </SectionCard>
         </div>
       );
-    }
-        if (activeTab === "monetization") {
+    }   
+    
+    if (activeTab === "monetization") {
       const m = d.monetization;
       return (
         <div>
@@ -971,6 +972,6 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       )}
     </div>
   );
-      }
-                
-              
+        }
+    
+    
