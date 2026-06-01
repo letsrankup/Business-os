@@ -167,7 +167,7 @@ export default function AuditPage() {
     { id: "competitors", label: "Competitors", icon: "🎯" },
   ];
 
-  // Global extraction fields to dynamically safely handle any format structure
+  // Extraction mappings for dynamic data matching
   const scores = result?.scores || {};
   const pageInfo = result?.pageInfo || {};
   const backlinks = result?.backlinks || {};
@@ -271,29 +271,41 @@ export default function AuditPage() {
               <div className="space-y-4">
                 {result.issues && Array.isArray(result.issues) && (
                   <Section icon="⚠️" title="Issues Found" accent="#f87171">
-                    {result.issues.map((item: any, i: number) => (
-                      <div key={i} className="flex items-start gap-3 py-2.5 border-b border-white/5 last:border-0">
-                        <Badge text={item.severity || "high"} type={item.severity || "high"} />
-                        <span className="text-xs text-gray-300 Regal-text-fix architecture loading-relaxed">
-                          {item.issue || item.description || (typeof item === 'string' ? item : "SEO indexing issue found.")}
-                        </span>
-                      </div>
-                    ))}
+                    {result.issues.map((item: any, i: number) => {
+                      // Smart text detection from both key formats
+                      const issueText = item.issue || item.description || (typeof item === 'string' ? item : "");
+                      return (
+                        <div key={i} className="flex items-start gap-3 py-2.5 border-b border-white/5 last:border-0">
+                          <Badge text={item.severity || "high"} type={item.severity || "high"} />
+                          <span className="text-xs text-gray-300 leading-relaxed">
+                            {issueText || "SEO indexing layout check anomaly detected."}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </Section>
                 )}
 
                 {result.recommendations && Array.isArray(result.recommendations) && (
                   <Section icon="✅" title="Recommendations" accent="#00e5a0">
-                    {result.recommendations.map((item: any, i: number) => (
-                      <div key={i} className="py-2.5 border-b border-white/5 last:border-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[#00f5a0] text-sm">✓</span>
-                          <span className="text-xs text-gray-200 font-semibold">{item.action || item.recommendation || "Optimize target setup"}</span>
-                          <Badge text={item.priority || "medium"} type={item.priority || "medium"} />
+                    {result.recommendations.map((item: any, i: number) => {
+                      // Smart dynamic matching for both action and recommendation tags
+                      const actionText = item.action || item.recommendation || (typeof item === 'string' ? item : "");
+                      return (
+                        <div key={i} className="py-2.5 border-b border-white/5 last:border-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[#00f5a0] text-sm">✓</span>
+                            <span className="text-xs text-gray-200 font-semibold">
+                              {actionText || "Optimizing structural headers code structure"}
+                            </span>
+                            <Badge text={item.priority || "medium"} type={item.priority || "medium"} />
+                          </div>
+                          <p className="text-[11px] text-gray-500 pl-4.5">
+                            Expected impact: {item.impact || "High structural page enhancement performance speed"}
+                          </p>
                         </div>
-                        <p className="text-[11px] text-gray-500 pl-4.5">Expected impact: {item.impact || "High enhancement configuration"}</p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </Section>
                 )}
 
@@ -398,4 +410,4 @@ export default function AuditPage() {
       </div>
     </AppLayout>
   );
-        }
+    }
