@@ -1,55 +1,90 @@
 "use client";
 
 import { useState } from "react";
+import CompetitorResult from "./CompetitorResult";
 
 export default function CompetitorForm() {
+  const [website, setWebsite] = useState("");
+  const [competitor, setCompetitor] = useState("");
 
-const [website,setWebsite] = useState("");
-const [competitor,setCompetitor] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
 
-const submit = async()=>{
+  const handleSubmit = async () => {
+    try {
+      setLoading(true);
 
-const res = await fetch("/api/competitor",{
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-body:JSON.stringify({
-website,
-competitor
-})
-});
+      const response = await fetch("/api/competitor", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          website,
+          competitor,
+        }),
+      });
 
-const data = await res.json();
+      const data = await response.json();
 
-console.log(data);
+      if (data.success) {
+        setResult(data);
+      } else {
+        alert(data.message);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Request Failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-};
+  return (
+    <div className="rounded-xl border border-gray-700 p-5">
 
-return (
+      <div className="mb-4">
+        <label className="block mb-2">
+          Your Website
+        </label>
 
-<div className="space-y-4">
+        <input
+          type="text"
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+          placeholder="https://yourwebsite.com"
+          className="w-full p-3 rounded border"
+        />
+      </div>
 
-<input
-placeholder="Your Website"
-className="w-full border p-3"
-onChange={(e)=>setWebsite(e.target.value)}
-/>
+      <div className="mb-4">
+        <label className="block mb-2">
+          Competitor Website
+        </label>
 
-<input
-placeholder="Competitor Website"
-className="w-full border p-3"
-onChange={(e)=>setCompetitor(e.target.value)}
-/>
+        <input
+          type="text"
+          value={competitor}
+          onChange={(e) => setCompetitor(e.target.value)}
+          placeholder="https://competitor.com"
+          className="w-full p-3 rounded border"
+        />
+      </div>
 
-<button
-onClick={submit}
-className="bg-green-500 px-4 py-2 rounded"
->
-Analyze
-</button>
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
+        className="px-6 py-3 rounded bg-green-600 text-white"
+      >
+        {loading ? "Analyzing..." : "Analyze Competitor"}
+      </button>
 
-</div>
+      {result && (
+        <CompetitorResult
+          result={result}
+        />
+      )}
 
-);
+    </div>
+  );
 }
