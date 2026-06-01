@@ -19,6 +19,7 @@ export default function LoginPage() {
     setError("");
     try {
       await signIn(email, password);
+      await new Promise(resolve => setTimeout(resolve, 500));
       window.location.href = "/dashboard";
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : "Login failed. Please try again.";
@@ -131,4 +132,4 @@ export default function LoginPage() {
       </div>
     </div>
   );
-  }
+        }
