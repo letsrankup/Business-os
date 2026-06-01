@@ -10,6 +10,7 @@ const NAV = [
   { label: "Content AI", href: "/content",   icon: "✍️" },
   { label: "Proposals",  href: "/proposal",  icon: "📄" },
   { label: "Leads",      href: "/leads",     icon: "🎯" },
+  { href: "/invoice", icon: "💰", label: "Invoice" },
   { label: "CRM",        href: "/crm",       icon: "👥" },
   { label: "Settings",   href: "/settings",  icon: "⚙️" },
 ];
