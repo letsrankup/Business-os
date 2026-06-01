@@ -2,12 +2,18 @@ import CompetitorForm from "@/components/CompetitorForm";
 
 export default function CompetitorPage() {
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">
-        Competitor Analysis
-      </h1>
+    <main className="p-6">
+      <div className="max-w-5xl mx-auto">
+        <h1 className="text-3xl font-bold mb-2">
+          Competitor Analysis
+        </h1>
 
-      <CompetitorForm />
-    </div>
+        <p className="text-gray-400 mb-6">
+          Compare your website against competitors and discover opportunities.
+        </p>
+
+        <CompetitorForm />
+      </div>
+    </main>
   );
 }
