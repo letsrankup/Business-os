@@ -13,6 +13,11 @@ const NAV = [
   { href: "/invoice", icon: "💰", label: "Invoice" },
   { label: "CRM",        href: "/crm",       icon: "👥" },
   { label: "Settings",   href: "/settings",  icon: "⚙️" },
+  {
+    name: "Competitor AI",
+    href: "/competitor",
+    icon: "⚔️"
+  }
 ];
 
 export default function Sidebar({ open = true }: { open?: boolean }) {
