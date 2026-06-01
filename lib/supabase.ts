@@ -1,12 +1,10 @@
-import { createClient as createSupabaseInstance } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-// ─── Browser Client Instance ──────────────────────────────────
-export const supabase = createSupabaseInstance(supabaseUrl, supabaseKey);
+export const supabase = createBrowserClient(supabaseUrl, supabaseKey);
 
-// ─── Sign Up Function ─────────────────────────────────────────
 export async function signUp(email: string, password: string, fullName: string) {
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -17,7 +15,6 @@ export async function signUp(email: string, password: string, fullName: string) 
   return data;
 }
 
-// ─── Sign In Function ─────────────────────────────────────────
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -27,7 +24,6 @@ export async function signIn(email: string, password: string) {
   return data;
 }
 
-// ─── Google Login Function ────────────────────────────────────
 export async function signInWithGoogle() {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -38,19 +34,16 @@ export async function signInWithGoogle() {
   return data;
 }
 
-// ─── Sign Out Function ────────────────────────────────────────
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw new Error(error.message);
 }
 
-// ─── Get Current User Function ────────────────────────────────
 export async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
   return user;
 }
 
-// ─── Reset Password Function ──────────────────────────────────
 export async function resetPassword(email: string) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -59,7 +52,6 @@ export async function resetPassword(email: string) {
   if (error) throw new Error(error.message);
 }
 
-// ─── Dynamic Client Helper (Important Fallback) ───────────────
 export function createClient() {
-  return createSupabaseInstance(supabaseUrl, supabaseKey);
-    }
+  return createBrowserClient(supabaseUrl, supabaseKey);
+}
