@@ -1,3 +1,4 @@
+"use client";
 import { useState, useEffect, useRef } from "react";
 
 const SECTIONS = [
@@ -103,7 +104,6 @@ const Tag = ({ text, type = "neutral" }) => {
     </div>
   );
 };
-
 export default function CompetitorAnalysisPro() {
   const [yourSite, setYourSite] = useState("");
   const [compSite, setCompSite] = useState("");
@@ -343,7 +343,8 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       setProgressMsg("✅ Analysis complete!");
 
       const text = data.content?.map(b => b.text || "").join("") || "";
-      const clean = text.replace(/```json|```/g, "").trim();
+      const clean = text.replace(/```json|
+```/g, "").trim();
       const parsed = JSON.parse(clean);
       setTimeout(() => {
         setResult(parsed);
@@ -356,7 +357,6 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       setLoading(false);
     }
   };
-
   const threatColor = (level) =>
     level === "High" ? "#ef4444" : level === "Medium" ? "#f59e0b" : "#22c55e";
 
@@ -379,7 +379,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       return (
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 20, flexWrap: "wrap" }}>
-            <ScoreRing score={o.overall_score} size={90} color={color} />
+            <ScoreRing score="{o.overall_score}" size="{90}" color="{color}"/>
             <div>
               <div style={{ color: "#f1f5f9", fontSize: 22, fontWeight: 800, fontFamily: "'Space Mono', monospace" }}>{o.competitor_name}</div>
               <div style={{ color: "#64748b", fontSize: 13 }}>{o.domain} · {o.industry}</div>
@@ -394,21 +394,21 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🏢" label="Founded" value={o.founded_year} color={color} />
-            <MetricCard icon="👥" label="Company Size" value={o.company_size} color={color} />
-            <MetricCard icon="📍" label="HQ" value={o.headquarters} color={color} />
-            <MetricCard icon="🏆" label="Market Position" value={o.market_position} color={color} />
+            <MetricCard icon="🏢" label="Founded" value="{o.founded_year}" color="{color}"/>
+            <MetricCard icon="👥" label="Company Size" value="{o.company_size}" color="{color}"/>
+            <MetricCard icon="📍" label="HQ" value="{o.headquarters}" color="{color}"/>
+            <MetricCard icon="🏆" label="Market Position" value="{o.market_position}" color="{color}"/>
           </div>
-          <SectionCard title="Business Model" icon="💼" color={color}>
+          <SectionCard title="Business Model" icon="💼" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{o.business_model}</div>
           </SectionCard>
-          <SectionCard title="Target Audience" icon="🎯" color={color}>
+          <SectionCard title="Target Audience" icon="🎯" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{o.target_audience}</div>
           </SectionCard>
-          <SectionCard title="Unique Value Proposition" icon="💡" color={color}>
+          <SectionCard title="Unique Value Proposition" icon="💡" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{o.unique_value_prop}</div>
           </SectionCard>
-          <SectionCard title="Executive Intelligence Summary" icon="🧠" color={color}>
+          <SectionCard title="Executive Intelligence Summary" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{o.executive_summary}</div>
           </SectionCard>
         </div>
@@ -420,20 +420,20 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       return (
         <div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
-            <ScoreRing score={s.score} color={color} />
+            <ScoreRing score="{s.score}" color="{color}"/>
             <div style={{ flex: 1 }}>
-              <ProgressBar label="Domain Authority" value={s.domain_authority} color={color} />
-              <ProgressBar label="Trust Flow" value={s.trust_flow} color={color} />
-              <ProgressBar label="Mobile Score" value={s.mobile_score} color={color} />
+              <ProgressBar label="Domain Authority" value="{s.domain_authority}" color="{color}"/>
+              <ProgressBar label="Trust Flow" value="{s.trust_flow}" color="{color}"/>
+              <ProgressBar label="Mobile Score" value="{s.mobile_score}" color="{color}"/>
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🗝️" label="Organic Keywords" value={s.organic_keywords} color={color} />
-            <MetricCard icon="🥇" label="Top 3 Rankings" value={s.ranking_keywords_top3} color={color} />
-            <MetricCard icon="🏅" label="Featured Snippets" value={s.featured_snippets} color={color} />
-            <MetricCard icon="📑" label="Indexed Pages" value={s.indexed_pages} color={color} />
+            <MetricCard icon="🗝️" label="Organic Keywords" value="{s.organic_keywords}" color="{color}"/>
+            <MetricCard icon="🥇" label="Top 3 Rankings" value="{s.ranking_keywords_top3}" color="{color}"/>
+            <MetricCard icon="🏅" label="Featured Snippets" value="{s.featured_snippets}" color="{color}"/>
+            <MetricCard icon="📑" label="Indexed Pages" value="{s.indexed_pages}" color="{color}"/>
           </div>
-          <SectionCard title="Core Web Vitals" icon="⚡" color={color}>
+          <SectionCard title="Core Web Vitals" icon="⚡" color="{color}">
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
               {[["LCP", s.core_web_vitals?.lcp, "#22c55e"], ["FID", s.core_web_vitals?.fid, "#06b6d4"], ["CLS", s.core_web_vitals?.cls, "#f59e0b"]].map(([k, v, c]) => (
                 <div key={k} style={{ textAlign: "center" }}>
@@ -443,25 +443,22 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
               ))}
             </div>
           </SectionCard>
-          <SectionCard title="Structured Data" icon="📋" color={color}>
+          <SectionCard title="Structured Data" icon="📋" color="{color}">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {s.structured_data?.map(t => <Pill key={t} text={t} color={color} />)}
+              {s.structured_data?.map(t => <Pill key="{t}" text="{t}" color="{color}"/>)}
             </div>
           </SectionCard>
           <SectionCard title="SEO Strengths" icon="✅" color="#22c55e">
-            {s.strengths?.map(x => <Tag key={x} text={x} type="strength" />)}
+            {s.strengths?.map(x => <Tag key="{x}" text="{x}" type="strength"/>)}
           </SectionCard>
           <SectionCard title="SEO Weaknesses" icon="❌" color="#ef4444">
-            {s.weaknesses?.map(x => <Tag key={x} text={x} type="weakness" />)}
+            {s.weaknesses?.map(x => <Tag key="{x}" text="{x}" type="weakness"/>)}
           </SectionCard>
-          <SectionCard title="SEO Intelligence" icon="🧠" color={color}>
+          <SectionCard title="SEO Intelligence" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{s.insights}</div>
           </SectionCard>
         </div>
       );
-    }
-
-       );
     }
 
     if (activeTab === "content") {
@@ -469,24 +466,24 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       return (
         <div>
           <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-            <ScoreRing score={c.score} color={color} />
+            <ScoreRing score="{c.score}" color="{color}"/>
             <div style={{ flex: 1 }}>
-              <ProgressBar label="Readability" value={c.readability_score} color={color} />
-              <ProgressBar label="Content Freshness" value={c.content_freshness === "High" ? 85 : 50} max={100} color={color} />
+              <ProgressBar label="Readability" value="{c.readability_score}" color="{color}"/>
+              <ProgressBar label="Content Freshness" value="{c.content_freshness" "High" ? 85 : 50} max="{100}" color="{color}"/>
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="📄" label="Total Pages" value={c.total_pages} color={color} />
-            <MetricCard icon="✍️" label="Blog Posts" value={c.blog_posts} color={color} />
-            <MetricCard icon="📏" label="Avg Word Count" value={c.avg_word_count} color={color} />
-            <MetricCard icon="📅" label="Publishing Rate" value={c.publishing_frequency} color={color} />
+            <MetricCard icon="📄" label="Total Pages" value="{c.total_pages}" color="{color}"/>
+            <MetricCard icon="✍️" label="Blog Posts" value="{c.blog_posts}" color="{color}"/>
+            <MetricCard icon="📏" label="Avg Word Count" value="{c.avg_word_count}" color="{color}"/>
+            <MetricCard icon="📅" label="Publishing Rate" value="{c.publishing_frequency}" color="{color}"/>
           </div>
-          <SectionCard title="Top Content Formats" icon="🎨" color={color}>
+          <SectionCard title="Top Content Formats" icon="🎨" color="{color}">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {c.top_content_formats?.map(f => <Pill key={f} text={f} color={color} />)}
+              {c.top_content_formats?.map(f => <Pill key="{f}" text="{f}" color="{color}"/>)}
             </div>
           </SectionCard>
-          <SectionCard title="Top Topics Covered" icon="📌" color={color}>
+          <SectionCard title="Top Topics Covered" icon="📌" color="{color}">
             {c.top_topics?.map((t, i) => (
               <div key={t} style={{ padding: "6px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13 }}>
                 <span style={{ color, marginRight: 8 }}>{i + 1}.</span>{t}
@@ -494,47 +491,46 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
             ))}
           </SectionCard>
           <SectionCard title="Content Gaps (Your Opportunities)" icon="🎯" color="#f59e0b">
-            {c.content_gaps?.map(g => <Tag key={g} text={g} type="opportunity" />)}
+            {c.content_gaps?.map(g => <Tag key="{g}" text="{g}" type="opportunity"/>)}
           </SectionCard>
-          <SectionCard title="Content Intelligence" icon="🧠" color={color}>
+          <SectionCard title="Content Intelligence" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{c.insights}</div>
           </SectionCard>
         </div>
       );
-    }
-
-    if (activeTab === "technical") {
+        }
+            if (activeTab === "technical") {
       const t = d.technical;
       return (
         <div>
           <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-            <ScoreRing score={t.score} color={color} />
+            <ScoreRing score="{t.score}" color="{color}"/>
             <div style={{ flex: 1 }}>
-              <ProgressBar label="Desktop Speed" value={t.page_speed_desktop} color={color} />
-              <ProgressBar label="Mobile Speed" value={t.page_speed_mobile} color={color} />
-              <ProgressBar label="Security Headers" value={t.security_headers} max={12} color={color} />
+              <ProgressBar label="Desktop Speed" value="{t.page_speed_desktop}" color="{color}"/>
+              <ProgressBar label="Mobile Speed" value="{t.page_speed_mobile}" color="{color}"/>
+              <ProgressBar label="Security Headers" value="{t.security_headers}" max="{12}" color="{color}"/>
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🖥️" label="CMS" value={t.cms} color={color} />
-            <MetricCard icon="☁️" label="Hosting" value={t.hosting} color={color} />
-            <MetricCard icon="🌐" label="CDN" value={t.cdn} color={color} />
-            <MetricCard icon="⏱️" label="Uptime" value={t.uptime} color={color} />
+            <MetricCard icon="🖥️" label="CMS" value="{t.cms}" color="{color}"/>
+            <MetricCard icon="☁️" label="Hosting" value="{t.hosting}" color="{color}"/>
+            <MetricCard icon="🌐" label="CDN" value="{t.cdn}" color="{color}"/>
+            <MetricCard icon="⏱️" label="Uptime" value="{t.uptime}" color="{color}"/>
           </div>
-          <SectionCard title="Technology Stack" icon="⚙️" color={color}>
+          <SectionCard title="Technology Stack" icon="⚙️" color="{color}">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {t.tech_stack?.map(s => <Pill key={s} text={s} color={color} />)}
+              {t.tech_stack?.map(s => <Pill key="{s}" text="{s}" color="{color}"/>)}
             </div>
           </SectionCard>
-          <SectionCard title="Analytics & Marketing Tools" icon="📊" color={color}>
+          <SectionCard title="Analytics & Marketing Tools" icon="📊" color="{color}">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-              {t.analytics_tools?.map(s => <Pill key={s} text={s} color="#f59e0b" />)}
+              {t.analytics_tools?.map(s => <Pill key="{s}" text="{s}" color="#f59e0b"/>)}
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {t.marketing_tools?.map(s => <Pill key={s} text={s} color="#ec4899" />)}
+              {t.marketing_tools?.map(s => <Pill key="{s}" text="{s}" color="#ec4899"/>)}
             </div>
           </SectionCard>
-          <SectionCard title="Tech Intelligence" icon="🧠" color={color}>
+          <SectionCard title="Tech Intelligence" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{t.insights}</div>
           </SectionCard>
         </div>
@@ -553,7 +549,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       return (
         <div>
           <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-            <ScoreRing score={s.score} color={color} />
+            <ScoreRing score="{s.score}" color="{color}"/>
             <div style={{ flex: 1 }}>
               <div style={{ marginBottom: 8 }}>
                 <div style={{ color: "#64748b", fontSize: 11, marginBottom: 4 }}>Brand Sentiment</div>
@@ -568,7 +564,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
                   <span style={{ color: "#ef4444", fontSize: 11 }}>-{s.brand_sentiment?.negative}%</span>
                 </div>
               </div>
-              <MetricCard icon="💬" label="Monthly Mentions" value={s.brand_mentions_monthly} color={color} />
+              <MetricCard icon="💬" label="Monthly Mentions" value="{s.brand_mentions_monthly}" color="{color}"/>
             </div>
           </div>
           {platforms.map(p => {
@@ -594,7 +590,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
               </div>
             );
           })}
-          <SectionCard title="Social Intelligence" icon="🧠" color={color}>
+          <SectionCard title="Social Intelligence" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{s.insights}</div>
           </SectionCard>
         </div>
@@ -607,26 +603,26 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       return (
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="👁️" label="Monthly Visits" value={t.monthly_visits} color={color} />
-            <MetricCard icon="👤" label="Unique Visitors" value={t.monthly_unique_visitors} color={color} />
-            <MetricCard icon="⏱️" label="Avg Duration" value={t.avg_visit_duration} color={color} />
-            <MetricCard icon="📄" label="Pages/Session" value={t.pages_per_session} color={color} />
-            <MetricCard icon="↩️" label="Bounce Rate" value={t.bounce_rate} color={color} />
-            <MetricCard icon="📈" label="Traffic Trend" value={t.traffic_trend} color="#22c55e" />
+            <MetricCard icon="👁️" label="Monthly Visits" value="{t.monthly_visits}" color="{color}"/>
+            <MetricCard icon="👤" label="Unique Visitors" value="{t.monthly_unique_visitors}" color="{color}"/>
+            <MetricCard icon="⏱️" label="Avg Duration" value="{t.avg_visit_duration}" color="{color}"/>
+            <MetricCard icon="📄" label="Pages/Session" value="{t.pages_per_session}" color="{color}"/>
+            <MetricCard icon="↩️" label="Bounce Rate" value="{t.bounce_rate}" color="{color}"/>
+            <MetricCard icon="📈" label="Traffic Trend" value="{t.traffic_trend}" color="#22c55e"/>
           </div>
-          <SectionCard title="Traffic Sources" icon="🗺️" color={color}>
+          <SectionCard title="Traffic Sources" icon="🗺️" color="{color}">
             {Object.entries(sources).map(([src, pct]) => (
-              <ProgressBar key={src} label={src.charAt(0).toUpperCase() + src.slice(1)} value={pct} color={color} />
+              <ProgressBar key="{src}" label="{src.charAt(0).toUpperCase()" + src.slice(1)} value="{pct}" color="{color}"/>
             ))}
           </SectionCard>
-          <SectionCard title="Top Countries" icon="🌍" color={color}>
+          <SectionCard title="Top Countries" icon="🌍" color="{color}">
             {t.top_countries?.map(c => (
               <div key={c} style={{ padding: "6px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13 }}>
                 🌐 {c}
               </div>
             ))}
           </SectionCard>
-          <SectionCard title="Device Split" icon="📱" color={color}>
+          <SectionCard title="Device Split" icon="📱" color="{color}">
             <div style={{ display: "flex", gap: 16 }}>
               {[["📱 Mobile", t.device_split?.mobile, color], ["🖥️ Desktop", t.device_split?.desktop, "#8b5cf6"], ["📲 Tablet", t.device_split?.tablet, "#f59e0b"]].map(([label, val, c]) => (
                 <div key={label} style={{ textAlign: "center" }}>
@@ -636,7 +632,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
               ))}
             </div>
           </SectionCard>
-          <SectionCard title="Traffic Intelligence" icon="🧠" color={color}>
+          <SectionCard title="Traffic Intelligence" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{t.insights}</div>
           </SectionCard>
         </div>
@@ -648,28 +644,28 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       return (
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🔗" label="Total Backlinks" value={b.total_backlinks} color={color} />
-            <MetricCard icon="🌐" label="Referring Domains" value={b.referring_domains} color={color} />
-            <MetricCard icon="✅" label="Dofollow" value={b.dofollow_ratio} color="#22c55e" />
-            <MetricCard icon="📈" label="Link Velocity" value={b.link_velocity} color={color} />
+            <MetricCard icon="🔗" label="Total Backlinks" value="{b.total_backlinks}" color="{color}"/>
+            <MetricCard icon="🌐" label="Referring Domains" value="{b.referring_domains}" color="{color}"/>
+            <MetricCard icon="✅" label="Dofollow" value="{b.dofollow_ratio}" color="#22c55e"/>
+            <MetricCard icon="📈" label="Link Velocity" value="{b.link_velocity}" color="{color}"/>
           </div>
-          <SectionCard title="Top Referring Domains" icon="🏆" color={color}>
+          <SectionCard title="Top Referring Domains" icon="🏆" color="{color}">
             {b.top_referring_domains?.map(d => (
               <div key={d} style={{ padding: "6px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13 }}>
                 🔗 {d}
               </div>
             ))}
           </SectionCard>
-          <SectionCard title="Top Anchor Texts" icon="⚓" color={color}>
+          <SectionCard title="Top Anchor Texts" icon="⚓" color="{color}">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {b.top_anchor_texts?.map(t => <Pill key={t} text={t} color={color} />)}
+              {b.top_anchor_texts?.map(t => <Pill key="{t}" text="{t}" color="{color}"/>)}
             </div>
           </SectionCard>
           <SectionCard title="Toxic Backlinks" icon="☠️" color="#ef4444">
             <div style={{ color: "#ef4444", fontSize: 18, fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>{b.toxic_backlinks}</div>
             <div style={{ color: "#64748b", fontSize: 12 }}>of total backlink profile is toxic/spammy</div>
           </SectionCard>
-          <SectionCard title="Backlink Intelligence" icon="🧠" color={color}>
+          <SectionCard title="Backlink Intelligence" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{b.insights}</div>
           </SectionCard>
         </div>
@@ -681,12 +677,12 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       return (
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🔑" label="Their Unique KWs" value={k.competitor_unique_keywords} color="#ef4444" />
-            <MetricCard icon="🤝" label="Shared KWs" value={k.shared_keywords} color={color} />
-            <MetricCard icon="⭐" label="Your Unique KWs" value={k.your_unique_keywords} color="#22c55e" />
-            <MetricCard icon="🎯" label="Long-tail Opps" value={k.long_tail_opportunities} color="#f59e0b" />
+            <MetricCard icon="🔑" label="Their Unique KWs" value="{k.competitor_unique_keywords}" color="#ef4444"/>
+            <MetricCard icon="🤝" label="Shared KWs" value="{k.shared_keywords}" color="{color}"/>
+            <MetricCard icon="⭐" label="Your Unique KWs" value="{k.your_unique_keywords}" color="#22c55e"/>
+            <MetricCard icon="🎯" label="Long-tail Opps" value="{k.long_tail_opportunities}" color="#f59e0b"/>
           </div>
-          <SectionCard title="🔥 Top Keyword Gap Opportunities" icon="🎯" color={color}>
+          <SectionCard title="🔥 Top Keyword Gap Opportunities" icon="🎯" color="{color}">
             {k.gap_opportunities?.map((g, i) => (
               <div key={i} style={{
                 padding: "10px 0", borderBottom: "1px solid #1e293b",
@@ -696,61 +692,60 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
                   <div style={{ color: "#f1f5f9", fontSize: 13, fontWeight: 600 }}>{g.keyword}</div>
                   <div style={{ color: "#64748b", fontSize: 11 }}>{g.volume} · Difficulty: {g.difficulty}</div>
                 </div>
-                <Pill text={g.opportunity} color={g.opportunity === "High" ? "#22c55e" : "#f59e0b"} />
+                <Pill text="{g.opportunity}" color="{g.opportunity" "High" ? "#22c55e" : "#f59e0b"}/>
               </div>
             ))}
           </SectionCard>
           <SectionCard title="Quick Win Keywords" icon="⚡" color="#22c55e">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {k.quick_win_keywords?.map(kw => <Pill key={kw} text={kw} color="#22c55e" />)}
+              {k.quick_win_keywords?.map(kw => <Pill key="{kw}" text="{kw}" color="#22c55e"/>)}
             </div>
           </SectionCard>
-          <SectionCard title="Keyword Intelligence" icon="🧠" color={color}>
+          <SectionCard title="Keyword Intelligence" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{k.insights}</div>
           </SectionCard>
         </div>
       );
     }
-
-    if (activeTab === "monetization") {
+        if (activeTab === "monetization") {
       const m = d.monetization;
       return (
         <div>
           <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-            <ScoreRing score={m.score} color={color} />
+            <ScoreRing score="{m.score}" color="{color}"/>
             <div>
               <div style={{ color: "#f1f5f9", fontSize: 18, fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>{m.estimated_mrr}</div>
               <div style={{ color: "#64748b", fontSize: 12 }}>Estimated Monthly Revenue</div>
               <div style={{ marginTop: 6 }}>
-                <Pill text={`${m.pricing_tiers} Pricing Tiers`} color={color} />
-                {m.free_trial && <Pill text="Free Trial ✓" color="#22c55e" />}
-                {m.affiliate_program && <Pill text="Affiliate ✓" color="#f59e0b" />}
+                <Pill text="{`${m.pricing_tiers}" Pricing Tiers`} color="{color}"/>
+                {m.free_trial && <Pill text="Free Trial ✓" color="#22c55e"/>}
+                {m.affiliate_program && <Pill text="Affiliate ✓" color="#f59e0b"/>}
               </div>
             </div>
           </div>
-          <SectionCard title="Revenue Models" icon="💰" color={color}>
+          <SectionCard title="Revenue Models" icon="💰" color="{color}">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {m.revenue_model?.map(r => <Pill key={r} text={r} color={color} />)}
+              {m.revenue_model?.map(r => <Pill key="{r}" text="{r}" color="{color}"/>)}
             </div>
           </SectionCard>
           <SectionCard title="Upsell Tactics" icon="📈" color="#f59e0b">
-            {m.upsell_tactics?.map(t => <Tag key={t} text={t} type="opportunity" />)}
+            {m.upsell_tactics?.map(t => <Tag key="{t}" text="{t}" type="opportunity"/>)}
           </SectionCard>
-          <SectionCard title="Pricing Strategy" icon="🏷️" color={color}>
+          <SectionCard title="Pricing Strategy" icon="🏷️" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{m.pricing_strategy}</div>
             <div style={{ marginTop: 8 }}>
               <span style={{ color, fontFamily: "'Space Mono', monospace", fontSize: 16, fontWeight: 700 }}>{m.average_deal_size}</span>
               <span style={{ color: "#64748b", fontSize: 12 }}> average deal size</span>
             </div>
           </SectionCard>
-          <SectionCard title="Monetization Intelligence" icon="🧠" color={color}>
+          <SectionCard title="Monetization Intelligence" icon="🧠" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{m.insights}</div>
           </SectionCard>
         </div>
       );
-                       }
+    }
 
-  if (activeTab === "strategy") {
+    if (activeTab === "strategy") {
       const s = d.strategy;
       return (
         <div>
@@ -775,13 +770,13 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
               </div>
             ))}
           </SectionCard>
-          <SectionCard title="Your Competitive Opportunities" icon="🏆" color={color}>
-            {s.your_opportunities?.map(o => <Tag key={o} text={o} type="opportunity" />)}
+          <SectionCard title="Your Competitive Opportunities" icon="🏆" color="{color}">
+            {s.your_opportunities?.map(o => <Tag key="{o}" text="{o}" type="opportunity"/>)}
           </SectionCard>
           <SectionCard title="⚠️ Risk Factors" icon="🚨" color="#ef4444">
-            {s.risk_factors?.map(r => <Tag key={r} text={r} type="weakness" />)}
+            {s.risk_factors?.map(r => <Tag key="{r}" text="{r}" type="weakness"/>)}
           </SectionCard>
-          <SectionCard title="🧠 Final Strategic Verdict" icon="⚔️" color={color}>
+          <SectionCard title="🧠 Final Strategic Verdict" icon="⚔️" color="{color}">
             <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{s.final_verdict}</div>
           </SectionCard>
         </div>
@@ -797,7 +792,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
       fontFamily: "'Courier New', 'Space Mono', monospace",
       color: "#f1f5f9", padding: 0
     }}>
-      {/* Google Font */}
+      
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
         * { box-sizing: border-box; }
@@ -808,7 +803,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
         input::placeholder { color: #334155; }
       `}</style>
 
-      {/* Header */}
+      
       <div style={{
         background: "linear-gradient(135deg, #020617 0%, #0a1628 50%, #020617 100%)",
         borderBottom: "1px solid #06b6d422",
@@ -831,7 +826,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
         </div>
       </div>
 
-      {/* Form */}
+      
       <div style={{ padding: "16px 20px", background: "#050d1a", borderBottom: "1px solid #0f2040" }}>
         <div style={{ marginBottom: 10 }}>
           <label style={{ color: "#475569", fontSize: 11, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Your Website (optional)</label>
@@ -889,7 +884,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
         </button>
       </div>
 
-      {/* Loading */}
+      
       {loading && (
         <div style={{ padding: "20px", background: "#050d1a" }}>
           <div style={{ color: "#06b6d4", fontSize: 12, marginBottom: 8, fontFamily: "'Space Mono', monospace" }}>{progressMsg}</div>
@@ -918,10 +913,10 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
         </div>
       )}
 
-      {/* Results */}
+      
       {result && (
         <div>
-          {/* Score Bar */}
+          
           <div style={{
             background: "#050d1a", borderBottom: "1px solid #0f2040",
             padding: "12px 20px", display: "flex", gap: 10, overflowX: "auto"
@@ -938,7 +933,7 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
             })}
           </div>
 
-          {/* Tabs */}
+          
           <div style={{
             display: "flex", overflowX: "auto", gap: 0,
             borderBottom: "1px solid #0f2040", background: "#050d1a"
@@ -955,14 +950,14 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
             ))}
           </div>
 
-          {/* Section Content */}
+          
           <div style={{ padding: "16px 20px 60px" }}>
             {renderSection()}
           </div>
         </div>
       )}
 
-      {/* Empty State */}
+      
       {!loading && !result && (
         <div style={{ padding: 40, textAlign: "center" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>🕵️</div>
@@ -977,4 +972,5 @@ Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT struct
     </div>
   );
       }
-  
+                
+              
