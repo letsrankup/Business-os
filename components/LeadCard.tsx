@@ -3,7 +3,15 @@ interface Lead {
   email?: string; website?: string; score?: number;
   industry?: string; description?: string;
 }
-export default function LeadCard({ lead }: { lead: Lead }) {
+
+// Props ki type define kar di taake TypeScript gussa na kare
+interface LeadCardProps {
+  lead: Lead;
+  onPropose: () => void;
+  isGenerating: boolean;
+}
+
+export default function LeadCard({ lead, onPropose, isGenerating }: LeadCardProps) {
   const sc = lead.score || 0;
   const scColor = sc >= 85 ? "#00f5a0" : sc >= 70 ? "#f5a000" : "#f55";
   return (
@@ -36,8 +44,17 @@ export default function LeadCard({ lead }: { lead: Lead }) {
       </div>
       <div className="mt-4 flex gap-2">
         <button className="flex-1 text-xs py-2 rounded-xl bg-[#00d9f5]/10 border border-[#00d9f5]/20 text-[#00d9f5] hover:bg-[#00d9f5]/20 transition-all">Add to CRM</button>
-        <button className="flex-1 text-xs py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-all">Propose</button>
+        
+        {/* Propose Button ko completely wire up kar diya hai */}
+        <button 
+          onClick={onPropose}
+          disabled={isGenerating}
+          className="flex-1 text-xs py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        >
+          {isGenerating ? "⏳ Generating..." : "Propose"}
+        </button>
       </div>
     </div>
   );
-        }
+                             }
+        
