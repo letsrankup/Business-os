@@ -146,4 +146,4 @@ export default function LeadsPage() {
       )}
     </AppLayout>
   );
-        }
+}
