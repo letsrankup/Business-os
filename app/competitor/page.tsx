@@ -1,977 +1,786 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+// app/competitor/page.tsx — REAL LIVE Competitor Intelligence
 
-const SECTIONS = [
-  { id: "overview", label: "Overview", icon: "🎯" },
-  { id: "seo", label: "SEO Intelligence", icon: "🔍" },
-  { id: "content", label: "Content Strategy", icon: "📝" },
-  { id: "technical", label: "Tech Stack", icon: "⚙️" },
-  { id: "social", label: "Social & Brand", icon: "📡" },
-  { id: "traffic", label: "Traffic & Audience", icon: "📊" },
-  { id: "backlinks", label: "Backlink Profile", icon: "🔗" },
-  { id: "keywords", label: "Keyword Gaps", icon: "🗝️" },
-  { id: "monetization", label: "Monetization", icon: "💰" },
-  { id: "strategy", label: "Battle Plan", icon: "⚔️" },
+import { useState, useRef } from "react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface KWGap { kw: string; vol: string; kd: number; opportunity: string }
+interface TopKW  { kw: string; vol: string; pos: string }
+interface Action { action: string; impact: string; effort: string }
+
+interface Result {
+  overview:     Record<string, string | number>;
+  performance:  Record<string, string | number | string[]>;
+  seo_on_page:  Record<string, string | number | boolean | string[]>;
+  technical:    Record<string, string | number | string[]>;
+  traffic:      Record<string, string | number | Record<string,number> | string[]>;
+  seo_off_page: Record<string, string | number | string[]>;
+  keywords:     { organic_total:string; top_keywords:TopKW[]; gap_keywords:KWGap[]; quick_wins:string[]; score:number; insights:string };
+  social:       Record<string, string | number | Record<string,string|number>>;
+  monetization: Record<string, string | number | boolean | string[]>;
+  battleplan:   { competitor_advantages:string[]; your_opportunities:string[]; quick_wins_30d:Action[]; medium_90d:string[]; long_12mo:string[]; risks:string[]; differentiation:string; verdict:string };
+  _meta:        { domain:string; scanned_at:string; real_sources:Record<string,boolean> };
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const TABS = [
+  { id:"overview",     icon:"🎯", label:"Overview"   },
+  { id:"performance",  icon:"⚡", label:"Performance" },
+  { id:"seo",          icon:"🔍", label:"SEO"         },
+  { id:"technical",    icon:"⚙️", label:"Tech Stack"  },
+  { id:"traffic",      icon:"📊", label:"Traffic"     },
+  { id:"backlinks",    icon:"🔗", label:"Backlinks"   },
+  { id:"keywords",     icon:"🗝️", label:"Keywords"    },
+  { id:"social",       icon:"📡", label:"Social"      },
+  { id:"monetization", icon:"💰", label:"Revenue"     },
+  { id:"battleplan",   icon:"⚔️", label:"Battle Plan" },
 ];
 
-const ScoreRing = ({ score, size = 80, color = "#06b6d4" }) => {
-  const r = (size - 10) / 2;
-  const circ = 2 * Math.PI * r;
-  const pct = (score / 100) * circ;
+const STEPS = [
+  "🔍 Resolving DNS records...",
+  "🌐 Scraping website metadata...",
+  "⚡ Running Google PageSpeed test...",
+  "📊 Fetching domain rank...",
+  "🤖 AI searching the web for company info...",
+  "📡 Scanning social media presence...",
+  "🗝️ Discovering keyword gaps...",
+  "💰 Analyzing monetization model...",
+  "⚔️ Building your battle plan...",
+  "✅ Finalizing live report...",
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const score2color = (s: number) => s >= 70 ? "#10b981" : s >= 50 ? "#f59e0b" : "#ef4444";
+const score2grade = (s: number) => s >= 90 ? "A+" : s >= 80 ? "A" : s >= 70 ? "B" : s >= 60 ? "C" : s >= 50 ? "D" : "F";
+
+// ─── Micro Components ─────────────────────────────────────────────────────────
+const LiveBadge = ({ real }: { real?: boolean }) => (
+  <span style={{
+    background: real ? "#10b98120" : "#6b728020",
+    border: `1px solid ${real ? "#10b98150" : "#6b728040"}`,
+    color: real ? "#10b981" : "#9ca3af",
+    fontSize: 9, padding: "1px 6px", borderRadius: 99,
+    fontFamily: "monospace", whiteSpace: "nowrap", flexShrink: 0,
+  }}>{real ? "🟢 LIVE" : "🤖 AI"}</span>
+);
+
+const Ring = ({ score, size = 72 }: { score: number; size?: number }) => {
+  const r = (size - 8) / 2, c = 2 * Math.PI * r, f = (score / 100) * c;
+  const col = score2color(score);
   return (
     <svg width={size} height={size}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1e293b" strokeWidth="8" />
-      <circle
-        cx={size / 2} cy={size / 2} r={r}
-        fill="none" stroke={color} strokeWidth="8"
-        strokeDasharray={`${pct} ${circ}`}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: "stroke-dasharray 1.2s cubic-bezier(0.4,0,0.2,1)" }}
-      />
-      <text x={size / 2} y={size / 2 + 5} textAnchor="middle" fill={color} fontSize="16" fontWeight="bold" fontFamily="'Space Mono', monospace">
-        {score}
-      </text>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#1f2937" strokeWidth="6"/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth="6"
+        strokeDasharray={`${f} ${c}`} strokeLinecap="round"
+        transform={`rotate(-90 ${size/2} ${size/2})`}
+        style={{ transition: "stroke-dasharray 1.2s ease" }}/>
+      <text x={size/2} y={size/2+5} textAnchor="middle" fill={col}
+        fontSize="14" fontWeight="bold" fontFamily="monospace">{score}</text>
     </svg>
   );
 };
 
-const Pill = ({ text, color = "#06b6d4" }) => (
-  <span style={{
-    background: color + "22",
-    border: `1px solid ${color}44`,
-    color, borderRadius: 999, padding: "2px 10px",
-    fontSize: 11, fontFamily: "'Space Mono', monospace", whiteSpace: "nowrap"
-  }}>{text}</span>
-);
-
-const MetricCard = ({ label, value, icon, sub, color = "#06b6d4" }) => (
-  <div style={{
-    background: "#0f172a", border: `1px solid ${color}33`,
-    borderRadius: 12, padding: "14px 16px",
-    display: "flex", flexDirection: "column", gap: 4,
-    boxShadow: `0 0 20px ${color}11`
-  }}>
-    <div style={{ fontSize: 20 }}>{icon}</div>
-    <div style={{ color: "#64748b", fontSize: 11, fontFamily: "'Space Mono', monospace", textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
-    <div style={{ color, fontWeight: 700, fontSize: 18, fontFamily: "'Space Mono', monospace" }}>{value}</div>
-    {sub && <div style={{ color: "#475569", fontSize: 11 }}>{sub}</div>}
+const Bar = ({ label, val, max = 100, color = "#10b981", real }: {
+  label: string; val: number; max?: number; color?: string; real?: boolean
+}) => (
+  <div style={{ marginBottom: 10 }}>
+    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3, alignItems:"center" }}>
+      <span style={{ color:"#9ca3af", fontSize:12 }}>{label}</span>
+      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+        <LiveBadge real={real}/>
+        <span style={{ color, fontSize:12, fontFamily:"monospace" }}>{val}/{max}</span>
+      </div>
+    </div>
+    <div style={{ background:"#1f2937", borderRadius:99, height:5 }}>
+      <div style={{ width:`${Math.min((val/max)*100,100)}%`, height:"100%", background:color, borderRadius:99, transition:"width 1s ease" }}/>
+    </div>
   </div>
 );
 
-const SectionCard = ({ title, icon, children, color = "#06b6d4" }) => (
-  <div style={{
-    background: "#0a1628", border: `1px solid ${color}22`,
-    borderRadius: 16, padding: 20, marginBottom: 16,
-    boxShadow: `0 4px 32px ${color}08`
-  }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      <span style={{ color, fontWeight: 700, fontSize: 14, fontFamily: "'Space Mono', monospace", letterSpacing: 0.5 }}>{title}</span>
+const Card = ({ title, icon, accent="#10b981", badge, children }: {
+  title:string; icon:string; accent?:string; badge?:boolean; children:React.ReactNode
+}) => (
+  <div style={{ background:"#111827", border:`1px solid ${accent}22`, borderRadius:12, padding:16, marginBottom:12 }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <span>{icon}</span>
+        <span style={{ color:accent, fontWeight:700, fontSize:13, fontFamily:"monospace" }}>{title}</span>
+      </div>
+      {badge !== undefined && <LiveBadge real={badge}/>}
     </div>
     {children}
   </div>
 );
 
-const ProgressBar = ({ label, value, max = 100, color = "#06b6d4" }) => (
-  <div style={{ marginBottom: 10 }}>
-    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-      <span style={{ color: "#94a3b8", fontSize: 12 }}>{label}</span>
-      <span style={{ color, fontSize: 12, fontFamily: "'Space Mono', monospace" }}>{value}/{max}</span>
-    </div>
-    <div style={{ background: "#1e293b", borderRadius: 99, height: 6, overflow: "hidden" }}>
-      <div style={{
-        width: `${(value / max) * 100}%`, height: "100%",
-        background: `linear-gradient(90deg, ${color}, ${color}88)`,
-        borderRadius: 99, transition: "width 1s ease"
-      }} />
-    </div>
+const Grid2 = ({ items }: { items: { icon:string; label:string; val:string|number; color?:string; real?:boolean }[] }) => (
+  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+    {items.map((m,i) => (
+      <div key={i} style={{ background:"#111827", border:"1px solid #1f2937", borderRadius:10, padding:12 }}>
+        <div style={{ fontSize:18, marginBottom:4 }}>{m.icon}</div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+          <div>
+            <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase", letterSpacing:0.5 }}>{m.label}</div>
+            <div style={{ color:m.color||"#10b981", fontWeight:700, fontSize:14, fontFamily:"monospace", marginTop:2 }}>{m.val}</div>
+          </div>
+          <LiveBadge real={m.real}/>
+        </div>
+      </div>
+    ))}
   </div>
 );
 
-const Tag = ({ text, type = "neutral" }) => {
-  const colors = { strength: "#22c55e", weakness: "#ef4444", opportunity: "#f59e0b", neutral: "#06b6d4" };
-  const c = colors[type];
-  return (
-    <div style={{
-      display: "flex", alignItems: "flex-start", gap: 8,
-      padding: "8px 0", borderBottom: "1px solid #1e293b"
-    }}>
-      <span style={{ fontSize: 14, marginTop: 1 }}>
-        {type === "strength" ? "✅" : type === "weakness" ? "❌" : type === "opportunity" ? "🎯" : "→"}
-      </span>
-      <span style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 1.5 }}>{text}</span>
-    </div>
-  );
-};
-        export default function CompetitorAnalysisPro() {
-  const [yourSite, setYourSite] = useState("");
-  const [compSite, setCompSite] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+const Chip = ({ text, color="#10b981" }: { text:string; color?:string }) => (
+  <span style={{ background:color+"20", border:`1px solid ${color}40`, color, borderRadius:999,
+    padding:"2px 10px", fontSize:11, fontFamily:"monospace", display:"inline-block", margin:"2px" }}>{text}</span>
+);
+
+const Row = ({ text, icon="→", color="#d1d5db" }: { text:string; icon?:string; color?:string }) => (
+  <div style={{ display:"flex", gap:8, padding:"7px 0", borderBottom:"1px solid #1f2937" }}>
+    <span style={{ flexShrink:0 }}>{icon}</span>
+    <span style={{ color, fontSize:13, lineHeight:1.5 }}>{text}</span>
+  </div>
+);
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+export default function CompetitorPage() {
+  const [yourSite,  setYourSite]  = useState("");
+  const [compSite,  setCompSite]  = useState("");
+  const [industry,  setIndustry]  = useState("");
+  const [loading,   setLoading]   = useState(false);
+  const [step,      setStep]      = useState(0);
+  const [progress,  setProgress]  = useState(0);
+  const [result,    setResult]    = useState<Result | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [progress, setProgress] = useState(0);
-  const [progressMsg, setProgressMsg] = useState("");
-  const [error, setError] = useState("");
-  const progressRef = useRef(null);
+  const [error,     setError]     = useState("");
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const progressSteps = [
-    "🔍 Scanning DNS & WHOIS records...",
-    "📡 Analyzing backlink profiles...",
-    "🗝️ Extracting keyword opportunities...",
-    "⚙️ Detecting technology stack...",
-    "📊 Estimating traffic patterns...",
-    "📝 Auditing content strategy...",
-    "🔗 Mapping internal link structure...",
-    "📱 Checking social signals...",
-    "💰 Identifying monetization models...",
-    "🤖 Running AI competitive intelligence...",
-    "⚔️ Generating battle plan...",
-    "✅ Finalizing deep report...",
-  ];
-
-  const startProgress = () => {
-    let i = 0;
-    setProgress(0);
-    setProgressMsg(progressSteps[0]);
-    progressRef.current = setInterval(() => {
-      i++;
-      const pct = Math.min(95, Math.round((i / progressSteps.length) * 100));
-      setProgress(pct);
-      setProgressMsg(progressSteps[Math.min(i, progressSteps.length - 1)]);
-      if (i >= progressSteps.length) clearInterval(progressRef.current);
-    }, 1800);
-  };
-
-  const analyze = async () => {
-    if (!compSite.trim()) { setError("Competitor website required!"); return; }
-    setError("");
-    setLoading(true);
-    setResult(null);
-    startProgress();
-
-    const prompt = `You are the world's most advanced competitive intelligence AI, combining capabilities of Semrush, Ahrefs, Moz, SimilarWeb, BuiltWith, SpyFu, BuzzSumo, and Brandwatch into one system.
-
-Perform a DEEP, COMPREHENSIVE, DATA-RICH competitive analysis.
-
-My Website: ${yourSite || "Not provided"}
-Competitor: ${compSite}
-Industry: ${industry || "Auto-detect"}
-
-Return ONLY a raw JSON object (no markdown, no backticks) with this EXACT structure:
-
-{
-  "overview": {
-    "competitor_name": "...",
-    "domain": "...",
-    "industry": "...",
-    "founded_year": "...",
-    "company_size": "...",
-    "headquarters": "...",
-    "business_model": "...",
-    "target_audience": "...",
-    "unique_value_prop": "...",
-    "overall_score": 78,
-    "threat_level": "High|Medium|Low",
-    "market_position": "...",
-    "executive_summary": "3-4 sentence deep insight about this competitor"
-  },
-  "seo": {
-    "score": 82,
-    "domain_authority": 67,
-    "page_authority": 58,
-    "trust_flow": 45,
-    "citation_flow": 52,
-    "organic_keywords": "142K",
-    "ranking_keywords_top3": "8,200",
-    "ranking_keywords_top10": "31,500",
-    "featured_snippets": 234,
-    "core_web_vitals": { "lcp": "1.8s", "fid": "12ms", "cls": "0.04" },
-    "mobile_score": 91,
-    "indexed_pages": "89,000",
-    "crawl_errors": 12,
-    "structured_data": ["FAQ", "Article", "BreadcrumbList", "Product"],
-    "meta_optimization": 88,
-    "title_tag_quality": 85,
-    "strengths": ["Excellent technical SEO", "Strong E-E-A-T signals", "Fast Core Web Vitals"],
-    "weaknesses": ["Thin content on category pages", "Missing alt tags on 15% images", "Slow TTFB on mobile"],
-    "insights": "3-4 sentences about SEO strategy"
-  },
-  "content": {
-    "score": 75,
-    "total_pages": "12,400",
-    "blog_posts": "3,200",
-    "avg_word_count": 2100,
-    "content_freshness": "High",
-    "publishing_frequency": "4x per week",
-    "top_content_formats": ["Long-form guides", "Case studies", "Video embeds", "Infographics"],
-    "content_gaps": ["No podcast content", "Weak video SEO", "No interactive tools"],
-    "top_topics": ["Topic 1", "Topic 2", "Topic 3", "Topic 4", "Topic 5"],
-    "readability_score": 72,
-    "content_depth": "Expert-level",
-    "cta_strategy": "...",
-    "insights": "3-4 sentences about content strategy"
-  },
-  "technical": {
-    "score": 80,
-    "cms": "...",
-    "hosting": "...",
-    "cdn": "...",
-    "ssl": true,
-    "http2": true,
-    "page_speed_desktop": 88,
-    "page_speed_mobile": 74,
-    "tech_stack": ["React", "Node.js", "AWS", "Cloudflare", "Stripe", "HubSpot"],
-    "analytics_tools": ["Google Analytics 4", "Hotjar", "Segment"],
-    "marketing_tools": ["HubSpot", "Mailchimp", "Intercom"],
-    "security_headers": 7,
-    "uptime": "99.97%",
-    "server_location": "...",
-    "compression": "Brotli",
-    "insights": "3-4 sentences about technical infrastructure"
-  },
-  "social": {
-    "score": 68,
-    "platforms": {
-      "twitter": { "followers": "45K", "engagement": "2.1%", "posts_per_week": 14 },
-      "linkedin": { "followers": "28K", "engagement": "3.4%", "posts_per_week": 5 },
-      "instagram": { "followers": "12K", "engagement": "1.8%", "posts_per_week": 7 },
-      "youtube": { "subscribers": "8K", "views_per_video": "2,400", "videos": 89 },
-      "facebook": { "followers": "22K", "engagement": "0.9%", "posts_per_week": 3 }
-    },
-    "brand_sentiment": { "positive": 67, "neutral": 24, "negative": 9 },
-    "brand_mentions_monthly": "4,200",
-    "influencer_partnerships": "Active",
-    "top_content_type": "...",
-    "viral_content_strategy": "...",
-    "insights": "3-4 sentences about social strategy"
-  },
-  "traffic": {
-    "score": 77,
-    "monthly_visits": "890K",
-    "monthly_unique_visitors": "620K",
-    "avg_visit_duration": "3m 42s",
-    "pages_per_session": 4.2,
-    "bounce_rate": "38%",
-    "traffic_sources": {
-      "organic": 52,
-      "direct": 22,
-      "social": 11,
-      "referral": 9,
-      "paid": 4,
-      "email": 2
-    },
-    "top_countries": ["United States 42%", "United Kingdom 18%", "India 12%", "Canada 8%", "Australia 6%"],
-    "device_split": { "mobile": 61, "desktop": 34, "tablet": 5 },
-    "traffic_trend": "Growing +18% YoY",
-    "audience_demographics": "25-44 age group, tech-savvy professionals",
-    "insights": "3-4 sentences about traffic patterns"
-  },
-  "backlinks": {
-    "score": 71,
-    "total_backlinks": "284K",
-    "referring_domains": "8,400",
-    "dofollow_ratio": "73%",
-    "nofollow_ratio": "27%",
-    "avg_dr_linking": 52,
-    "top_anchor_texts": ["brand name", "click here", "learn more", "keyword 1", "keyword 2"],
-    "toxic_backlinks": "2.1%",
-    "link_velocity": "+340 new links/month",
-    "top_referring_domains": ["forbes.com", "techcrunch.com", "producthunt.com"],
-    "link_building_strategy": "...",
-    "insights": "3-4 sentences about backlink profile"
-  },
-  "keywords": {
-    "score": 73,
-    "competitor_unique_keywords": "89,000",
-    "shared_keywords": "12,400",
-    "your_unique_keywords": "34,000",
-    "gap_opportunities": [
-      {"keyword": "example keyword 1", "volume": "8,200/mo", "difficulty": 42, "opportunity": "High"},
-      {"keyword": "example keyword 2", "volume": "5,400/mo", "difficulty": 38, "opportunity": "High"},
-      {"keyword": "example keyword 3", "volume": "3,100/mo", "difficulty": 29, "opportunity": "Medium"},
-      {"keyword": "example keyword 4", "volume": "2,800/mo", "difficulty": 55, "opportunity": "Medium"},
-      {"keyword": "example keyword 5", "volume": "1,900/mo", "difficulty": 22, "opportunity": "High"}
-    ],
-    "quick_win_keywords": ["keyword A", "keyword B", "keyword C"],
-    "long_tail_opportunities": 4200,
-    "insights": "3-4 sentences about keyword gaps"
-  },
-  "monetization": {
-    "score": 79,
-    "revenue_model": ["SaaS Subscription", "Freemium", "Enterprise Licensing"],
-    "estimated_mrr": "$280K-$420K",
-    "pricing_strategy": "...",
-    "free_trial": true,
-    "pricing_tiers": 3,
-    "average_deal_size": "$129/mo",
-    "churn_signals": "Low",
-    "upsell_tactics": ["Annual discount", "Feature gating", "Usage limits"],
-    "ad_revenue": false,
-    "affiliate_program": true,
-    "insights": "3-4 sentences about monetization strategy"
-  },
-  "strategy": {
-    "score": 76,
-    "competitive_advantages": ["Advantage 1", "Advantage 2", "Advantage 3"],
-    "your_opportunities": ["Opportunity 1", "Opportunity 2", "Opportunity 3", "Opportunity 4"],
-    "quick_wins_30_days": ["Action 1", "Action 2", "Action 3"],
-    "medium_term_90_days": ["Action 1", "Action 2", "Action 3"],
-    "long_term_12_months": ["Action 1", "Action 2", "Action 3"],
-    "differentiation_strategy": "...",
-    "positioning_recommendation": "...",
-    "risk_factors": ["Risk 1", "Risk 2"],
-    "final_verdict": "2-3 sentence final strategic verdict"
-  }
-}`;
-
+  const run = async () => {
+    if (!compSite.trim()) { setError("Competitor URL zaroori hai!"); return; }
+    setError(""); setResult(null); setLoading(true); setStep(0); setProgress(0);
+    let s = 0;
+    timer.current = setInterval(() => {
+      s = Math.min(s + 1, STEPS.length - 1);
+      setStep(s);
+      setProgress(Math.round((s / STEPS.length) * 90) + 5);
+    }, 2200);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4000,
-          messages: [{ role: "user", content: prompt }]
-        })
+      const res = await fetch("/api/competitor", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ yourSite, compSite, industry }),
       });
-
-      const data = await res.json();
-      clearInterval(progressRef.current);
+      if (timer.current) clearInterval(timer.current);
+      if (!res.ok) throw new Error("API Error");
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
       setProgress(100);
-      setProgressMsg("✅ Analysis complete!");
-
-      const text = data.content?.map(b => b.text || "").join("") || "";
-      const clean = text.replace(/```json|
-```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      setTimeout(() => {
-        setResult(parsed);
-        setLoading(false);
-        setActiveTab("overview");
-      }, 600);
-    } catch (e) {
-      clearInterval(progressRef.current);
-      setError("Analysis failed. Please try again.");
+      setTimeout(() => { setResult(json.data); setLoading(false); setActiveTab("overview"); }, 400);
+    } catch {
+      if (timer.current) clearInterval(timer.current);
+      setError("Analysis fail hua. Dobara try karo.");
       setLoading(false);
     }
   };
-        const threatColor = (level) =>
-    level === "High" ? "#ef4444" : level === "Medium" ? "#f59e0b" : "#22c55e";
 
-  const tabColor = (id) => {
-    const map = {
-      overview: "#06b6d4", seo: "#8b5cf6", content: "#f59e0b",
-      technical: "#22c55e", social: "#ec4899", traffic: "#06b6d4",
-      backlinks: "#8b5cf6", keywords: "#f59e0b", monetization: "#22c55e", strategy: "#ef4444"
-    };
-    return map[id] || "#06b6d4";
-  };
-
+  // ── Section renderers ────────────────────────────────────────────────────────
   const renderSection = () => {
     if (!result) return null;
-    const d = result;
-    const color = tabColor(activeTab);
+    const src = result._meta?.real_sources || {};
 
+    // ── Overview ──
     if (activeTab === "overview") {
-      const o = d.overview;
+      const o = result.overview;
+      const score = Number(o.overall_score) || 70;
+      const tc = o.threat_level === "High" ? "#ef4444" : o.threat_level === "Medium" ? "#f59e0b" : "#10b981";
       return (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 20, flexWrap: "wrap" }}>
-            <ScoreRing score="{o.overall_score}" size="{90}" color="{color}"/>
+        <>
+          <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+            <Ring score={score}/>
             <div>
-              <div style={{ color: "#f1f5f9", fontSize: 22, fontWeight: 800, fontFamily: "'Space Mono', monospace" }}>{o.competitor_name}</div>
-              <div style={{ color: "#64748b", fontSize: 13 }}>{o.domain} · {o.industry}</div>
-              <div style={{ marginTop: 8 }}>
-                <span style={{
-                  background: threatColor(o.threat_level) + "22",
-                  border: `1px solid ${threatColor(o.threat_level)}44`,
-                  color: threatColor(o.threat_level), borderRadius: 99,
-                  padding: "3px 12px", fontSize: 12, fontFamily: "'Space Mono', monospace"
-                }}>⚠️ {o.threat_level} Threat</span>
+              <h2 style={{ margin:0, fontSize:20, fontWeight:800, color:"#f9fafb" }}>{String(o.name)}</h2>
+              <p style={{ margin:"2px 0 6px", color:"#6b7280", fontSize:12 }}>{String(o.domain)} · {String(o.industry)}</p>
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                <span style={{ background:tc+"20", border:`1px solid ${tc}50`, color:tc, borderRadius:99, padding:"3px 12px", fontSize:11, fontFamily:"monospace" }}>
+                  ⚠️ {String(o.threat_level)} Threat
+                </span>
+                <span style={{ background:"#8b5cf620", border:"1px solid #8b5cf640", color:"#8b5cf6", borderRadius:99, padding:"3px 12px", fontSize:11, fontFamily:"monospace" }}>
+                  {String(o.market_position)}
+                </span>
               </div>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🏢" label="Founded" value="{o.founded_year}" color="{color}"/>
-            <MetricCard icon="👥" label="Company Size" value="{o.company_size}" color="{color}"/>
-            <MetricCard icon="📍" label="HQ" value="{o.headquarters}" color="{color}"/>
-            <MetricCard icon="🏆" label="Market Position" value="{o.market_position}" color="{color}"/>
+
+          {/* Real sources badge bar */}
+          <div style={{ background:"#111827", border:"1px solid #1f2937", borderRadius:10, padding:"10px 14px", marginBottom:12, display:"flex", gap:10, flexWrap:"wrap" }}>
+            <span style={{ color:"#6b7280", fontSize:11 }}>Live Sources:</span>
+            {[
+              ["PageSpeed", src.pagespeed],
+              ["Scraper",   src.scraped],
+              ["PageRank",  src.pagerank],
+              ["DNS",       src.dns],
+              ["Web Search",src.web_search],
+            ].map(([label, ok]) => (
+              <span key={String(label)} style={{ fontSize:11, color: ok ? "#10b981" : "#4b5563" }}>
+                {ok ? "✅" : "⭕"} {String(label)}
+              </span>
+            ))}
           </div>
-          <SectionCard title="Business Model" icon="💼" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{o.business_model}</div>
-          </SectionCard>
-          <SectionCard title="Target Audience" icon="🎯" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{o.target_audience}</div>
-          </SectionCard>
-          <SectionCard title="Unique Value Proposition" icon="💡" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{o.unique_value_prop}</div>
-          </SectionCard>
-          <SectionCard title="Executive Intelligence Summary" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{o.executive_summary}</div>
-          </SectionCard>
-        </div>
+
+          <Grid2 items={[
+            { icon:"🏢", label:"Founded",    val:String(o.founded),     real:src.web_search },
+            { icon:"👥", label:"Team Size",  val:String(o.employees),   real:src.web_search },
+            { icon:"📍", label:"Location",   val:String(o.headquarters),real:src.web_search },
+            { icon:"💸", label:"Funding",    val:String(o.funding),     real:src.web_search },
+          ]}/>
+          <Card title="Business Model" icon="💼" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{String(o.business_model)}</p>
+          </Card>
+          <Card title="Target Audience" icon="🎯" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{String(o.target_audience)}</p>
+          </Card>
+          <Card title="Unique Value Proposition" icon="💡" accent="#f59e0b" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{String(o.value_prop)}</p>
+          </Card>
+          <Card title="Executive Intelligence" icon="🧠" accent="#8b5cf6" badge={src.web_search}>
+            <p style={{ color:"#d1d5db", fontSize:13, lineHeight:1.7, margin:0 }}>{String(o.summary)}</p>
+          </Card>
+        </>
       );
     }
 
-    if (activeTab === "seo") {
-      const s = d.seo;
+    // ── Performance ──
+    if (activeTab === "performance") {
+      const p = result.performance;
+      const issues = (p.issues as string[]) || [];
+      const fixes  = (p.fixes  as string[]) || [];
       return (
-        <div>
-          <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
-            <ScoreRing score="{s.score}" color="{color}"/>
-            <div style={{ flex: 1 }}>
-              <ProgressBar label="Domain Authority" value="{s.domain_authority}" color="{color}"/>
-              <ProgressBar label="Trust Flow" value="{s.trust_flow}" color="{color}"/>
-              <ProgressBar label="Mobile Score" value="{s.mobile_score}" color="{color}"/>
+        <>
+          <div style={{ display:"flex", gap:16, marginBottom:12 }}>
+            <Ring score={Number(p.mob_perf)||0}/>
+            <div style={{ flex:1 }}>
+              <div style={{ color:"#6b7280", fontSize:11, marginBottom:8 }}>
+                🟢 LIVE data from Google PageSpeed API
+              </div>
+              <Bar label="Mobile Performance" val={Number(p.mob_perf)||0}  real={src.pagespeed}/>
+              <Bar label="Desktop Performance" val={Number(p.desk_perf)||0} real={src.pagespeed}/>
+              <Bar label="Accessibility"       val={Number(p.mob_access)||0} real={src.pagespeed} color="#f59e0b"/>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🗝️" label="Organic Keywords" value="{s.organic_keywords}" color="{color}"/>
-            <MetricCard icon="🥇" label="Top 3 Rankings" value="{s.ranking_keywords_top3}" color="{color}"/>
-            <MetricCard icon="🏅" label="Featured Snippets" value="{s.featured_snippets}" color="{color}"/>
-            <MetricCard icon="📑" label="Indexed Pages" value="{s.indexed_pages}" color="{color}"/>
-          </div>
-          <SectionCard title="Core Web Vitals" icon="⚡" color="{color}">
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-              {[["LCP", s.core_web_vitals?.lcp, "#22c55e"], ["FID", s.core_web_vitals?.fid, "#06b6d4"], ["CLS", s.core_web_vitals?.cls, "#f59e0b"]].map(([k, v, c]) => (
-                <div key={k} style={{ textAlign: "center" }}>
-                  <div style={{ color: c, fontSize: 18, fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>{v}</div>
-                  <div style={{ color: "#64748b", fontSize: 11 }}>{k}</div>
+
+          <Card title="Core Web Vitals" icon="⚡" badge={src.pagespeed}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+              {[["LCP",p.lcp,"#10b981"],["TBT",p.tbt,"#f59e0b"],["CLS",p.cls,"#06b6d4"],
+                ["TTFB",p.ttfb,"#8b5cf6"],["FCP",p.fcp,"#ec4899"],["Size",p.size,"#64748b"]
+              ].map(([k,v,c]) => (
+                <div key={k as string} style={{ background:"#0d1117", borderRadius:8, padding:10, textAlign:"center" }}>
+                  <div style={{ color:c as string, fontWeight:700, fontSize:15, fontFamily:"monospace" }}>{String(v||"N/A")}</div>
+                  <div style={{ color:"#4b5563", fontSize:10 }}>{k as string}</div>
                 </div>
               ))}
             </div>
-          </SectionCard>
-          <SectionCard title="Structured Data" icon="📋" color="{color}">
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {s.structured_data?.map(t => <Pill key="{t}" text="{t}" color="{color}"/>)}
-            </div>
-          </SectionCard>
-          <SectionCard title="SEO Strengths" icon="✅" color="#22c55e">
-            {s.strengths?.map(x => <Tag key="{x}" text="{x}" type="strength"/>)}
-          </SectionCard>
-          <SectionCard title="SEO Weaknesses" icon="❌" color="#ef4444">
-            {s.weaknesses?.map(x => <Tag key="{x}" text="{x}" type="weakness"/>)}
-          </SectionCard>
-          <SectionCard title="SEO Intelligence" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{s.insights}</div>
-          </SectionCard>
-        </div>
+          </Card>
+
+          <Grid2 items={[
+            { icon:"📱", label:"Mobile SEO",    val:String(p.mob_seo)||"N/A",  color:score2color(Number(p.mob_seo)||0), real:src.pagespeed },
+            { icon:"🏅", label:"Best Practices",val:String(p.mob_bp)||"N/A",   color:score2color(Number(p.mob_bp)||0),  real:src.pagespeed },
+            { icon:"♿", label:"Accessibility", val:String(p.mob_access)||"N/A",color:score2color(Number(p.mob_access)||0), real:src.pagespeed },
+            { icon:"🏆", label:"Grade",         val:String(p.grade)||score2grade(Number(p.mob_perf)||0), color:"#10b981", real:src.pagespeed },
+          ]}/>
+
+          <Card title="⚠️ Performance Issues" icon="🔴" accent="#ef4444" badge={src.pagespeed}>
+            {issues.map((x,i) => <Row key={i} text={x} icon="❌" color="#fca5a5"/>)}
+          </Card>
+          <Card title="✅ Recommended Fixes" icon="🔧" accent="#10b981" badge={src.pagespeed}>
+            {fixes.map((x,i) => <Row key={i} text={x} icon="✅"/>)}
+          </Card>
+        </>
       );
     }
 
-    if (activeTab === "content") {
-      const c = d.content;
+    // ── SEO ──
+    if (activeTab === "seo") {
+      const s = result.seo_on_page;
+      const off = result.seo_off_page;
+      const issues = (s.issues as string[]) || [];
       return (
-        <div>
-          <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-            <ScoreRing score="{c.score}" color="{color}"/>
-            <div style={{ flex: 1 }}>
-              <ProgressBar label="Readability" value="{c.readability_score}" color="{color}"/>
-              <ProgressBar label="Content Freshness" value="{c.content_freshness" "High" ? 85 : 50} max="{100}" color="{color}"/>
+        <>
+          <div style={{ display:"flex", gap:12, marginBottom:12 }}>
+            <Ring score={Number(s.score)||0}/>
+            <div style={{ flex:1 }}>
+              <Bar label="Mobile SEO Score"   val={Number(s.score)||0}  real={src.pagespeed}/>
+              <Bar label="Domain Authority"    val={Number(s.domain_authority)||0} real={src.pagerank}/>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="📄" label="Total Pages" value="{c.total_pages}" color="{color}"/>
-            <MetricCard icon="✍️" label="Blog Posts" value="{c.blog_posts}" color="{color}"/>
-            <MetricCard icon="📏" label="Avg Word Count" value="{c.avg_word_count}" color="{color}"/>
-            <MetricCard icon="📅" label="Publishing Rate" value="{c.publishing_frequency}" color="{color}"/>
-          </div>
-          <SectionCard title="Top Content Formats" icon="🎨" color="{color}">
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {c.top_content_formats?.map(f => <Pill key="{f}" text="{f}" color="{color}"/>)}
-            </div>
-          </SectionCard>
-          <SectionCard title="Top Topics Covered" icon="📌" color="{color}">
-            {c.top_topics?.map((t, i) => (
-              <div key={t} style={{ padding: "6px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13 }}>
-                <span style={{ color, marginRight: 8 }}>{i + 1}.</span>{t}
+
+          <Card title="On-Page SEO Elements" icon="📋" badge={src.scraped}>
+            {[
+              ["Page Title",     String(s.title||"Missing"),     (s.title as string)?.length > 0],
+              ["Meta Description",String(s.description||"Missing"), (s.description as string)?.length > 0],
+              ["H1 Tag",         String(s.h1||"Missing"),         !!s.h1],
+              ["Keywords Meta",  String(s.keywords_meta||"None"), !!s.keywords_meta],
+            ].map(([label, val, ok]) => (
+              <div key={label as string} style={{ padding:"8px 0", borderBottom:"1px solid #1f2937" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
+                  <span style={{ color:"#6b7280", fontSize:11 }}>{label as string}</span>
+                  <span style={{ color: ok ? "#10b981" : "#ef4444", fontSize:11 }}>{ok ? "✅" : "❌"}</span>
+                </div>
+                <span style={{ color:"#d1d5db", fontSize:12 }}>{String(val).slice(0, 90)}{String(val).length > 90 ? "…" : ""}</span>
               </div>
             ))}
-          </SectionCard>
-          <SectionCard title="Content Gaps (Your Opportunities)" icon="🎯" color="#f59e0b">
-            {c.content_gaps?.map(g => <Tag key="{g}" text="{g}" type="opportunity"/>)}
-          </SectionCard>
-          <SectionCard title="Content Intelligence" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{c.insights}</div>
-          </SectionCard>
-        </div>
-      );
-        }
-            if (activeTab === "technical") {
-      const t = d.technical;
-      return (
-        <div>
-          <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-            <ScoreRing score="{t.score}" color="{color}"/>
-            <div style={{ flex: 1 }}>
-              <ProgressBar label="Desktop Speed" value="{t.page_speed_desktop}" color="{color}"/>
-              <ProgressBar label="Mobile Speed" value="{t.page_speed_mobile}" color="{color}"/>
-              <ProgressBar label="Security Headers" value="{t.security_headers}" max="{12}" color="{color}"/>
+          </Card>
+
+          <Card title="SEO Signals" icon="🔬" badge={src.scraped}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {[
+                ["SSL/HTTPS",      s.ssl,            "🔒"],
+                ["Canonical Tag",  s.canonical,      "🔗"],
+                ["Structured Data",s.structured_data,"📋"],
+                ["Open Graph",     s.open_graph,     "🌐"],
+                ["Twitter Card",   s.twitter_card,   "🐦"],
+                ["Robots Meta",    s.robots_meta,    "🤖"],
+              ].map(([label, ok, icon]) => (
+                <div key={label as string} style={{ background:"#0d1117", borderRadius:8, padding:"8px 10px", display:"flex", gap:8, alignItems:"center" }}>
+                  <span>{icon as string}</span>
+                  <span style={{ color:"#9ca3af", fontSize:12, flex:1 }}>{label as string}</span>
+                  <span style={{ color: ok ? "#10b981" : "#ef4444" }}>{ok ? "✅" : "❌"}</span>
+                </div>
+              ))}
             </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🖥️" label="CMS" value="{t.cms}" color="{color}"/>
-            <MetricCard icon="☁️" label="Hosting" value="{t.hosting}" color="{color}"/>
-            <MetricCard icon="🌐" label="CDN" value="{t.cdn}" color="{color}"/>
-            <MetricCard icon="⏱️" label="Uptime" value="{t.uptime}" color="{color}"/>
-          </div>
-          <SectionCard title="Technology Stack" icon="⚙️" color="{color}">
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {t.tech_stack?.map(s => <Pill key="{s}" text="{s}" color="{color}"/>)}
-            </div>
-          </SectionCard>
-          <SectionCard title="Analytics & Marketing Tools" icon="📊" color="{color}">
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-              {t.analytics_tools?.map(s => <Pill key="{s}" text="{s}" color="#f59e0b"/>)}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {t.marketing_tools?.map(s => <Pill key="{s}" text="{s}" color="#ec4899"/>)}
-            </div>
-          </SectionCard>
-          <SectionCard title="Tech Intelligence" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{t.insights}</div>
-          </SectionCard>
-        </div>
+          </Card>
+
+          {(s.schema_types as string[])?.length > 0 && (
+            <Card title="Schema Types Detected" icon="🏗️" badge={src.scraped}>
+              <div>{(s.schema_types as string[]).map(t => <Chip key={t} text={t}/>)}</div>
+            </Card>
+          )}
+
+          <Grid2 items={[
+            { icon:"🔑", label:"Organic Keywords", val:String(s.organic_keywords||"~est"), real:src.web_search },
+            { icon:"🌐", label:"Domain Authority",  val:String(s.domain_authority||"N/A"), real:src.pagerank },
+            { icon:"🏆", label:"Global Rank",       val:String(off?.global_rank||"N/A"),   real:src.pagerank },
+            { icon:"📝", label:"Word Count",        val:String(s.word_count||0),            real:src.scraped },
+          ]}/>
+
+          <Card title="SEO Issues Found" icon="⚠️" accent="#ef4444">
+            {issues.map((x,i) => <Row key={i} text={x} icon="❌" color="#fca5a5"/>)}
+          </Card>
+
+          <Card title="Off-Page: Backlinks" icon="🔗" badge={src.web_search}>
+            <Grid2 items={[
+              { icon:"🔗", label:"Total Backlinks",   val:String(off?.total_backlinks||"~est"),      real:src.web_search },
+              { icon:"🌐", label:"Ref. Domains",      val:String(off?.referring_domains||"~est"),    real:src.web_search },
+              { icon:"✅", label:"Dofollow %",        val:String(off?.dofollow_pct||"~est"),         real:src.web_search },
+              { icon:"📈", label:"Link Velocity",     val:String(off?.link_velocity||"~est"),        real:src.web_search },
+            ]}/>
+          </Card>
+        </>
       );
     }
 
-    if (activeTab === "social") {
-      const s = d.social;
-      const platforms = [
-        { key: "twitter", icon: "𝕏", name: "Twitter/X" },
-        { key: "linkedin", icon: "in", name: "LinkedIn" },
-        { key: "instagram", icon: "📷", name: "Instagram" },
-        { key: "youtube", icon: "▶", name: "YouTube" },
-        { key: "facebook", icon: "f", name: "Facebook" },
-      ];
+    // ── Technical ──
+    if (activeTab === "technical") {
+      const t = result.technical;
+      const techStack   = (t.tech_stack   as string[]) || [];
+      const secHeaders  = (t.security_headers as string[]) || [];
+      const analytics   = (t.analytics    as string[]) || [];
+      const marketing   = (t.marketing    as string[]) || [];
+      const payments    = (t.payments     as string[]) || [];
       return (
-        <div>
-          <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-            <ScoreRing score="{s.score}" color="{color}"/>
-            <div style={{ flex: 1 }}>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ color: "#64748b", fontSize: 11, marginBottom: 4 }}>Brand Sentiment</div>
-                <div style={{ display: "flex", height: 8, borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ width: `${s.brand_sentiment?.positive}%`, background: "#22c55e" }} />
-                  <div style={{ width: `${s.brand_sentiment?.neutral}%`, background: "#64748b" }} />
-                  <div style={{ width: `${s.brand_sentiment?.negative}%`, background: "#ef4444" }} />
+        <>
+          <Grid2 items={[
+            { icon:"🖥️", label:"CMS/Framework", val:String(t.cdn||"Unknown"),      real:src.scraped },
+            { icon:"☁️", label:"Hosting",        val:String(t.hosting||"Unknown"),  real:src.dns     },
+            { icon:"🌐", label:"CDN",             val:String(t.cdn||"Unknown"),      real:src.dns     },
+            { icon:"📧", label:"Email System",    val:String(t.email_system||"?"),   real:src.dns     },
+            { icon:"🖧",  label:"IP Address",     val:String(t.ip||"N/A"),           real:src.dns     },
+            { icon:"📦", label:"HTML Size",       val:String(t.html_size||"N/A"),    real:src.scraped },
+          ]}/>
+          <Card title="Technologies Detected" icon="⚙️" badge={src.scraped}>
+            {techStack.length ? <div>{techStack.map(s => <Chip key={s} text={s}/>)}</div>
+              : <p style={{ color:"#4b5563", fontSize:13, margin:0 }}>No specific tech detected</p>}
+          </Card>
+          <Card title="Security Headers" icon="🔐" badge={src.scraped} accent={secHeaders.length >= 4 ? "#10b981" : "#f59e0b"}>
+            <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8 }}>
+              <span style={{ color: secHeaders.length >= 4 ? "#10b981" : "#f59e0b", fontWeight:700, fontSize:18, fontFamily:"monospace" }}>{secHeaders.length}/6</span>
+              <span style={{ color:"#6b7280", fontSize:12 }}>headers present</span>
+            </div>
+            <div>{secHeaders.length ? secHeaders.map(s => <Chip key={s} text={s} color="#10b981"/>) : <span style={{ color:"#ef4444", fontSize:13 }}>No security headers detected ⚠️</span>}</div>
+          </Card>
+          {analytics.length > 0 && (
+            <Card title="Analytics Stack" icon="📊" badge={src.scraped} accent="#f59e0b">
+              <div>{analytics.map(s => <Chip key={s} text={s} color="#f59e0b"/>)}</div>
+            </Card>
+          )}
+          {marketing.length > 0 && (
+            <Card title="Marketing Tools" icon="📣" badge={src.scraped} accent="#ec4899">
+              <div>{marketing.map(s => <Chip key={s} text={s} color="#ec4899"/>)}</div>
+            </Card>
+          )}
+          {payments.length > 0 && (
+            <Card title="Payment System" icon="💳" badge={src.scraped} accent="#8b5cf6">
+              <div>{payments.map(s => <Chip key={s} text={s} color="#8b5cf6"/>)}</div>
+            </Card>
+          )}
+          <Card title="Tech Intelligence" icon="🧠" accent="#8b5cf6" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{String(t.insights||"")}</p>
+          </Card>
+        </>
+      );
+    }
+
+    // ── Traffic ──
+    if (activeTab === "traffic") {
+      const t = result.traffic;
+      const sources = (t.traffic_sources || t.sources || {}) as Record<string, number>;
+      const countries = (t.top_countries as string[]) || [];
+      return (
+        <>
+          <Grid2 items={[
+            { icon:"👁️", label:"Monthly Visits",    val:String(t.monthly_visits||"~est"),  real:src.web_search },
+            { icon:"👤", label:"Unique Visitors",   val:String(t.unique_visitors||"~est"), real:src.web_search },
+            { icon:"⏱️", label:"Avg Duration",      val:String(t.avg_duration||"~est"),    real:src.web_search },
+            { icon:"↩️", label:"Bounce Rate",       val:String(t.bounce_rate||"~est"),     real:src.web_search },
+            { icon:"📈", label:"Trend",             val:String(t.trend||"~est"),   color:"#10b981", real:src.web_search },
+            { icon:"📅", label:"YoY Change",        val:String(t.yoy_change||"~est"), color:"#10b981", real:src.web_search },
+          ]}/>
+          <Card title="Traffic Sources" icon="🗺️" badge={src.web_search}>
+            {Object.entries(sources).map(([src2, pct]) => (
+              <Bar key={src2} label={src2.charAt(0).toUpperCase()+src2.slice(1)} val={Number(pct)||0}/>
+            ))}
+          </Card>
+          <Card title="Top Countries" icon="🌍" badge={src.web_search}>
+            {countries.map(c => <Row key={c} text={c} icon="🌐" color="#9ca3af"/>)}
+          </Card>
+          <Card title="Traffic Intelligence" icon="🧠" accent="#8b5cf6" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{String(t.insights||"")}</p>
+          </Card>
+        </>
+      );
+    }
+
+    // ── Backlinks ──
+    if (activeTab === "backlinks") {
+      const b = result.seo_off_page;
+      const topDoms = (b.top_backlinks as string[]) || [];
+      return (
+        <>
+          <Grid2 items={[
+            { icon:"🔗", label:"Total Backlinks",  val:String(b.total_backlinks||"~est"),    real:src.web_search },
+            { icon:"🌐", label:"Ref. Domains",     val:String(b.referring_domains||"~est"),  real:src.web_search },
+            { icon:"✅", label:"Dofollow %",       val:String(b.dofollow_pct||"~est"),       real:src.web_search },
+            { icon:"📈", label:"Link Velocity",    val:String(b.link_velocity||"~est"),      real:src.web_search },
+            { icon:"🏅", label:"Domain Rank",      val:String(b.domain_rank||"N/A"),         real:src.pagerank   },
+            { icon:"🌍", label:"Global Rank",      val:String(b.global_rank||"N/A"),         real:src.pagerank   },
+          ]}/>
+          <Card title="Top Referring Domains" icon="🏆" badge={src.web_search}>
+            {topDoms.map(d => <Row key={d} text={d} icon="🔗" color="#9ca3af"/>)}
+          </Card>
+          <Card title="Backlink Intelligence" icon="🧠" accent="#8b5cf6" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{String(b.insights||"")}</p>
+          </Card>
+        </>
+      );
+    }
+
+    // ── Keywords ──
+    if (activeTab === "keywords") {
+      const k = result.keywords;
+      return (
+        <>
+          <Grid2 items={[
+            { icon:"🔑", label:"Total Organic KWs", val:String(k.organic_total||"~est"), real:src.web_search },
+            { icon:"🏆", label:"Score",             val:String(k.score||0),              real:src.web_search },
+          ]}/>
+          <Card title="Top Ranking Keywords" icon="📌" badge={src.web_search}>
+            {(k.top_keywords||[]).map((kw, i) => (
+              <div key={i} style={{ padding:"8px 0", borderBottom:"1px solid #1f2937", display:"flex", justifyContent:"space-between" }}>
+                <div>
+                  <span style={{ color:"#10b981", marginRight:8, fontFamily:"monospace" }}>{i+1}.</span>
+                  <span style={{ color:"#f9fafb", fontSize:13 }}>{kw.kw}</span>
                 </div>
-                <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                  <span style={{ color: "#22c55e", fontSize: 11 }}>+{s.brand_sentiment?.positive}%</span>
-                  <span style={{ color: "#64748b", fontSize: 11 }}>~{s.brand_sentiment?.neutral}%</span>
-                  <span style={{ color: "#ef4444", fontSize: 11 }}>-{s.brand_sentiment?.negative}%</span>
+                <div style={{ display:"flex", gap:8 }}>
+                  <Chip text={kw.vol} color="#6b7280"/>
+                  <Chip text={`Pos ${kw.pos}`} color="#8b5cf6"/>
                 </div>
               </div>
-              <MetricCard icon="💬" label="Monthly Mentions" value="{s.brand_mentions_monthly}" color="{color}"/>
-            </div>
-          </div>
-          {platforms.map(p => {
-            const data = s.platforms?.[p.key];
-            if (!data) return null;
-            return (
-              <div key={p.key} style={{
-                background: "#0f172a", border: `1px solid ${color}22`,
-                borderRadius: 12, padding: "12px 16px", marginBottom: 10,
-                display: "flex", alignItems: "center", gap: 16
-              }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 8,
-                  background: color + "22", display: "flex", alignItems: "center",
-                  justifyContent: "center", color, fontWeight: 700, fontSize: 14,
-                  fontFamily: "'Space Mono', monospace", flexShrink: 0
-                }}>{p.icon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: "#f1f5f9", fontSize: 13, fontWeight: 600 }}>{p.name}</div>
-                  <div style={{ color: "#64748b", fontSize: 11 }}>{data.followers || data.subscribers} followers · {data.engagement || ""} engagement</div>
+            ))}
+          </Card>
+          <Card title="🔥 Keyword Gap Opportunities" icon="🎯" accent="#f59e0b" badge={src.web_search}>
+            {(k.gap_keywords||[]).map((g, i) => (
+              <div key={i} style={{ padding:"10px 0", borderBottom:"1px solid #1f2937", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                <div>
+                  <div style={{ color:"#f9fafb", fontSize:13, fontWeight:600 }}>{g.kw}</div>
+                  <div style={{ color:"#6b7280", fontSize:11 }}>{g.vol} · KD: {g.kd}</div>
                 </div>
-                <div style={{ color, fontSize: 13, fontFamily: "'Space Mono', monospace" }}>{data.posts_per_week || data.videos} posts</div>
+                <Chip text={g.opportunity} color={g.opportunity==="High"?"#10b981":"#f59e0b"}/>
+              </div>
+            ))}
+          </Card>
+          <Card title="⚡ Quick Win Keywords" icon="⚡" accent="#10b981">
+            <div>{(k.quick_wins||[]).map(kw => <Chip key={kw} text={kw}/>)}</div>
+          </Card>
+          <Card title="Keyword Intelligence" icon="🧠" accent="#8b5cf6" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{k.insights}</p>
+          </Card>
+        </>
+      );
+    }
+
+    // ── Social ──
+    if (activeTab === "social") {
+      const s = result.social as Record<string, Record<string,string|number>|string|number>;
+      const sent = (s.sentiment||{}) as {positive:number;neutral:number;negative:number};
+      return (
+        <>
+          <Card title="Brand Sentiment" icon="💬" badge={src.web_search}>
+            <div style={{ display:"flex", height:10, borderRadius:99, overflow:"hidden", marginBottom:8 }}>
+              <div style={{ width:`${sent.positive||65}%`, background:"#10b981" }}/>
+              <div style={{ width:`${sent.neutral||25}%`,  background:"#4b5563" }}/>
+              <div style={{ width:`${sent.negative||10}%`, background:"#ef4444" }}/>
+            </div>
+            <div style={{ display:"flex", gap:16 }}>
+              <span style={{ color:"#10b981", fontSize:13 }}>+{sent.positive||65}% Positive</span>
+              <span style={{ color:"#6b7280", fontSize:13 }}>~{sent.neutral||25}% Neutral</span>
+              <span style={{ color:"#ef4444", fontSize:13 }}>-{sent.negative||10}% Negative</span>
+            </div>
+          </Card>
+
+          {[
+            { key:"twitter",   icon:"𝕏",  name:"Twitter / X",  sub:"followers" },
+            { key:"linkedin",  icon:"in", name:"LinkedIn",      sub:"followers" },
+            { key:"instagram", icon:"📷", name:"Instagram",     sub:"followers" },
+            { key:"youtube",   icon:"▶",  name:"YouTube",       sub:"subscribers" },
+            { key:"facebook",  icon:"f",  name:"Facebook",      sub:"followers" },
+          ].map(p => {
+            const d = s[p.key] as Record<string,string|number>|undefined;
+            if (!d) return null;
+            return (
+              <div key={p.key} style={{ background:"#111827", border:"1px solid #1f2937", borderRadius:10, padding:"12px 14px", marginBottom:8, display:"flex", gap:12, alignItems:"center" }}>
+                <div style={{ width:34, height:34, borderRadius:8, background:"#10b98120", display:"flex", alignItems:"center", justifyContent:"center", color:"#10b981", fontWeight:700, fontSize:13, flexShrink:0 }}>{p.icon}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ color:"#f9fafb", fontSize:13, fontWeight:600 }}>{p.name}</div>
+                  <div style={{ color:"#6b7280", fontSize:12 }}>{String(d[p.sub]||d.followers||"~est")} {p.sub} {d.engagement ? `· ${d.engagement} engagement` : ""}</div>
+                </div>
+                <LiveBadge real={src.web_search}/>
               </div>
             );
           })}
-          <SectionCard title="Social Intelligence" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{s.insights}</div>
-          </SectionCard>
-        </div>
+
+          <Card title="Social Intelligence" icon="🧠" accent="#8b5cf6" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{String(s.insights||"")}</p>
+          </Card>
+        </>
       );
     }
 
-    if (activeTab === "traffic") {
-      const t = d.traffic;
-      const sources = t.traffic_sources || {};
-      return (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="👁️" label="Monthly Visits" value="{t.monthly_visits}" color="{color}"/>
-            <MetricCard icon="👤" label="Unique Visitors" value="{t.monthly_unique_visitors}" color="{color}"/>
-            <MetricCard icon="⏱️" label="Avg Duration" value="{t.avg_visit_duration}" color="{color}"/>
-            <MetricCard icon="📄" label="Pages/Session" value="{t.pages_per_session}" color="{color}"/>
-            <MetricCard icon="↩️" label="Bounce Rate" value="{t.bounce_rate}" color="{color}"/>
-            <MetricCard icon="📈" label="Traffic Trend" value="{t.traffic_trend}" color="#22c55e"/>
-          </div>
-          <SectionCard title="Traffic Sources" icon="🗺️" color="{color}">
-            {Object.entries(sources).map(([src, pct]) => (
-              <ProgressBar key="{src}" label="{src.charAt(0).toUpperCase()" + src.slice(1)} value="{pct}" color="{color}"/>
-            ))}
-          </SectionCard>
-          <SectionCard title="Top Countries" icon="🌍" color="{color}">
-            {t.top_countries?.map(c => (
-              <div key={c} style={{ padding: "6px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13 }}>
-                🌐 {c}
-              </div>
-            ))}
-          </SectionCard>
-          <SectionCard title="Device Split" icon="📱" color="{color}">
-            <div style={{ display: "flex", gap: 16 }}>
-              {[["📱 Mobile", t.device_split?.mobile, color], ["🖥️ Desktop", t.device_split?.desktop, "#8b5cf6"], ["📲 Tablet", t.device_split?.tablet, "#f59e0b"]].map(([label, val, c]) => (
-                <div key={label} style={{ textAlign: "center" }}>
-                  <div style={{ color: c, fontSize: 18, fontWeight: 700 }}>{val}%</div>
-                  <div style={{ color: "#64748b", fontSize: 11 }}>{label}</div>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
-          <SectionCard title="Traffic Intelligence" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{t.insights}</div>
-          </SectionCard>
-        </div>
-      );
-    }
-
-    if (activeTab === "backlinks") {
-      const b = d.backlinks;
-      return (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🔗" label="Total Backlinks" value="{b.total_backlinks}" color="{color}"/>
-            <MetricCard icon="🌐" label="Referring Domains" value="{b.referring_domains}" color="{color}"/>
-            <MetricCard icon="✅" label="Dofollow" value="{b.dofollow_ratio}" color="#22c55e"/>
-            <MetricCard icon="📈" label="Link Velocity" value="{b.link_velocity}" color="{color}"/>
-          </div>
-          <SectionCard title="Top Referring Domains" icon="🏆" color="{color}">
-            {b.top_referring_domains?.map(d => (
-              <div key={d} style={{ padding: "6px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13 }}>
-                🔗 {d}
-              </div>
-            ))}
-          </SectionCard>
-          <SectionCard title="Top Anchor Texts" icon="⚓" color="{color}">
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {b.top_anchor_texts?.map(t => <Pill key="{t}" text="{t}" color="{color}"/>)}
-            </div>
-          </SectionCard>
-          <SectionCard title="Toxic Backlinks" icon="☠️" color="#ef4444">
-            <div style={{ color: "#ef4444", fontSize: 18, fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>{b.toxic_backlinks}</div>
-            <div style={{ color: "#64748b", fontSize: 12 }}>of total backlink profile is toxic/spammy</div>
-          </SectionCard>
-          <SectionCard title="Backlink Intelligence" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{b.insights}</div>
-          </SectionCard>
-        </div>
-      );
-    }
-
-    if (activeTab === "keywords") {
-      const k = d.keywords;
-      return (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <MetricCard icon="🔑" label="Their Unique KWs" value="{k.competitor_unique_keywords}" color="#ef4444"/>
-            <MetricCard icon="🤝" label="Shared KWs" value="{k.shared_keywords}" color="{color}"/>
-            <MetricCard icon="⭐" label="Your Unique KWs" value="{k.your_unique_keywords}" color="#22c55e"/>
-            <MetricCard icon="🎯" label="Long-tail Opps" value="{k.long_tail_opportunities}" color="#f59e0b"/>
-          </div>
-          <SectionCard title="🔥 Top Keyword Gap Opportunities" icon="🎯" color="{color}">
-            {k.gap_opportunities?.map((g, i) => (
-              <div key={i} style={{
-                padding: "10px 0", borderBottom: "1px solid #1e293b",
-                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8
-              }}>
-                <div>
-                  <div style={{ color: "#f1f5f9", fontSize: 13, fontWeight: 600 }}>{g.keyword}</div>
-                  <div style={{ color: "#64748b", fontSize: 11 }}>{g.volume} · Difficulty: {g.difficulty}</div>
-                </div>
-                <Pill text="{g.opportunity}" color="{g.opportunity" "High" ? "#22c55e" : "#f59e0b"}/>
-              </div>
-            ))}
-          </SectionCard>
-          <SectionCard title="Quick Win Keywords" icon="⚡" color="#22c55e">
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {k.quick_win_keywords?.map(kw => <Pill key="{kw}" text="{kw}" color="#22c55e"/>)}
-            </div>
-          </SectionCard>
-          <SectionCard title="Keyword Intelligence" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{k.insights}</div>
-          </SectionCard>
-        </div>
-      );
-    }   
-    
+    // ── Monetization ──
     if (activeTab === "monetization") {
-      const m = d.monetization;
+      const m = result.monetization;
+      const models = (m.models as string[]) || [];
       return (
-        <div>
-          <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-            <ScoreRing score="{m.score}" color="{color}"/>
+        <>
+          <div style={{ display:"flex", gap:12, marginBottom:12, alignItems:"center" }}>
+            <Ring score={Number(m.score)||70}/>
             <div>
-              <div style={{ color: "#f1f5f9", fontSize: 18, fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>{m.estimated_mrr}</div>
-              <div style={{ color: "#64748b", fontSize: 12 }}>Estimated Monthly Revenue</div>
-              <div style={{ marginTop: 6 }}>
-                <Pill text="{`${m.pricing_tiers}" Pricing Tiers`} color="{color}"/>
-                {m.free_trial && <Pill text="Free Trial ✓" color="#22c55e"/>}
-                {m.affiliate_program && <Pill text="Affiliate ✓" color="#f59e0b"/>}
+              <div style={{ color:"#10b981", fontSize:20, fontWeight:800, fontFamily:"monospace" }}>{String(m.estimated_mrr||"~est")}</div>
+              <div style={{ color:"#6b7280", fontSize:12 }}>Estimated Monthly Revenue</div>
+              <div style={{ marginTop:6, display:"flex", gap:4, flexWrap:"wrap" }}>
+                {m.free_trial && <Chip text="Free Trial ✓" color="#10b981"/>}
+                {m.freemium   && <Chip text="Freemium ✓" color="#06b6d4"/>}
+                {m.affiliate_program && <Chip text="Affiliate ✓" color="#f59e0b"/>}
               </div>
             </div>
+            <LiveBadge real={src.web_search}/>
           </div>
-          <SectionCard title="Revenue Models" icon="💰" color="{color}">
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {m.revenue_model?.map(r => <Pill key="{r}" text="{r}" color="{color}"/>)}
-            </div>
-          </SectionCard>
-          <SectionCard title="Upsell Tactics" icon="📈" color="#f59e0b">
-            {m.upsell_tactics?.map(t => <Tag key="{t}" text="{t}" type="opportunity"/>)}
-          </SectionCard>
-          <SectionCard title="Pricing Strategy" icon="🏷️" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{m.pricing_strategy}</div>
-            <div style={{ marginTop: 8 }}>
-              <span style={{ color, fontFamily: "'Space Mono', monospace", fontSize: 16, fontWeight: 700 }}>{m.average_deal_size}</span>
-              <span style={{ color: "#64748b", fontSize: 12 }}> average deal size</span>
-            </div>
-          </SectionCard>
-          <SectionCard title="Monetization Intelligence" icon="🧠" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{m.insights}</div>
-          </SectionCard>
-        </div>
+          <Card title="Revenue Models" icon="💰" badge={src.web_search}>
+            <div>{models.map(r => <Chip key={r} text={r}/>)}</div>
+          </Card>
+          <Card title="Pricing" icon="🏷️" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:"0 0 6px" }}>{String(m.pricing_tiers||"~est")}</p>
+            {m.avg_deal && <div><span style={{ color:"#10b981", fontSize:16, fontWeight:700, fontFamily:"monospace" }}>{String(m.avg_deal)}</span><span style={{ color:"#6b7280", fontSize:12 }}> avg deal</span></div>}
+          </Card>
+          <Card title="Monetization Intelligence" icon="🧠" accent="#8b5cf6" badge={src.web_search}>
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{String(m.insights||"")}</p>
+          </Card>
+        </>
       );
     }
 
-    if (activeTab === "strategy") {
-      const s = d.strategy;
+    // ── Battle Plan ──
+    if (activeTab === "battleplan") {
+      const b = result.battleplan;
       return (
-        <div>
-          <SectionCard title="⚡ Quick Wins (30 Days)" icon="🏃" color="#22c55e">
-            {s.quick_wins_30_days?.map((a, i) => (
-              <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13, display: "flex", gap: 8 }}>
-                <span style={{ color: "#22c55e", fontWeight: 700 }}>{i + 1}.</span> {a}
+        <>
+          <Card title="⚡ Quick Wins — 30 Days" icon="🏃" accent="#10b981">
+            {(b.quick_wins_30d||[]).map((a,i) => (
+              <div key={i} style={{ padding:"10px 0", borderBottom:"1px solid #1f2937" }}>
+                <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+                  <span style={{ color:"#10b981", fontWeight:700, fontFamily:"monospace", flexShrink:0 }}>{i+1}.</span>
+                  <span style={{ color:"#d1d5db", fontSize:13, flex:1 }}>{a.action}</span>
+                </div>
+                <div style={{ display:"flex", gap:6, marginTop:6, marginLeft:16 }}>
+                  <Chip text={`Impact: ${a.impact}`} color={a.impact==="High"?"#10b981":"#f59e0b"}/>
+                  <Chip text={`Effort: ${a.effort}`} color={a.effort==="Low"?"#10b981":"#f59e0b"}/>
+                </div>
               </div>
             ))}
-          </SectionCard>
-          <SectionCard title="📈 Medium Term (90 Days)" icon="🗓️" color="#f59e0b">
-            {s.medium_term_90_days?.map((a, i) => (
-              <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13, display: "flex", gap: 8 }}>
-                <span style={{ color: "#f59e0b", fontWeight: 700 }}>{i + 1}.</span> {a}
+          </Card>
+          <Card title="📈 Medium Term — 90 Days" icon="🗓️" accent="#f59e0b">
+            {(b.medium_90d||[]).map((a,i) => (
+              <div key={i} style={{ padding:"7px 0", borderBottom:"1px solid #1f2937", display:"flex", gap:8 }}>
+                <span style={{ color:"#f59e0b", fontFamily:"monospace" }}>{i+1}.</span>
+                <span style={{ color:"#d1d5db", fontSize:13 }}>{a}</span>
               </div>
             ))}
-          </SectionCard>
-          <SectionCard title="🚀 Long Term (12 Months)" icon="🎯" color="#8b5cf6">
-            {s.long_term_12_months?.map((a, i) => (
-              <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid #1e293b", color: "#94a3b8", fontSize: 13, display: "flex", gap: 8 }}>
-                <span style={{ color: "#8b5cf6", fontWeight: 700 }}>{i + 1}.</span> {a}
+          </Card>
+          <Card title="🚀 Long Term — 12 Months" icon="🎯" accent="#8b5cf6">
+            {(b.long_12mo||[]).map((a,i) => (
+              <div key={i} style={{ padding:"7px 0", borderBottom:"1px solid #1f2937", display:"flex", gap:8 }}>
+                <span style={{ color:"#8b5cf6", fontFamily:"monospace" }}>{i+1}.</span>
+                <span style={{ color:"#d1d5db", fontSize:13 }}>{a}</span>
               </div>
             ))}
-          </SectionCard>
-          <SectionCard title="Your Competitive Opportunities" icon="🏆" color="{color}">
-            {s.your_opportunities?.map(o => <Tag key="{o}" text="{o}" type="opportunity"/>)}
-          </SectionCard>
-          <SectionCard title="⚠️ Risk Factors" icon="🚨" color="#ef4444">
-            {s.risk_factors?.map(r => <Tag key="{r}" text="{r}" type="weakness"/>)}
-          </SectionCard>
-          <SectionCard title="🧠 Final Strategic Verdict" icon="⚔️" color="{color}">
-            <div style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.7 }}>{s.final_verdict}</div>
-          </SectionCard>
-        </div>
+          </Card>
+          <Card title="Your Opportunities" icon="🏆" accent="#10b981">
+            {(b.your_opportunities||[]).map((o,i) => <Row key={i} text={o} icon="🎯"/>)}
+          </Card>
+          <Card title="⚠️ Risk Factors" icon="🚨" accent="#ef4444">
+            {(b.risks||[]).map((r,i) => <Row key={i} text={r} icon="⚠️" color="#fca5a5"/>)}
+          </Card>
+          <Card title="Differentiation Strategy" icon="🧬" accent="#06b6d4">
+            <p style={{ color:"#9ca3af", fontSize:13, lineHeight:1.7, margin:0 }}>{b.differentiation}</p>
+          </Card>
+          <Card title="🏁 Final Strategic Verdict" icon="⚔️" accent="#10b981">
+            <p style={{ color:"#d1fae5", fontSize:14, lineHeight:1.7, margin:0, fontWeight:500 }}>{b.verdict}</p>
+          </Card>
+        </>
       );
     }
-
     return null;
   };
 
-  return (
-    <div style={{
-      minHeight: "100vh", background: "#020617",
-      fontFamily: "'Courier New', 'Space Mono', monospace",
-      color: "#f1f5f9", padding: 0
-    }}>
-      
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: #0a0f1e; }
-        ::-webkit-scrollbar-thumb { background: #06b6d433; border-radius: 99px; }
-        input { outline: none; }
-        input::placeholder { color: #334155; }
-      `}</style>
+  // ── Render ───────────────────────────────────────────────────────────────────
+  const inputStyle: React.CSSProperties = {
+    width:"100%", background:"#0d1117", border:"1px solid #1f2937",
+    borderRadius:8, padding:"10px 12px", color:"#f9fafb", fontSize:14,
+    fontFamily:"monospace", boxSizing:"border-box", outline:"none",
+  };
 
-      
-      <div style={{
-        background: "linear-gradient(135deg, #020617 0%, #0a1628 50%, #020617 100%)",
-        borderBottom: "1px solid #06b6d422",
-        padding: "20px 20px 16px"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 10,
-            background: "linear-gradient(135deg, #06b6d4, #7c3aed)",
-            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20
-          }}>🕵️</div>
+  return (
+    <div style={{ background:"#030712", minHeight:"100vh", color:"#f9fafb" }}>
+
+      {/* Header */}
+      <div style={{ padding:"18px 20px 0", borderBottom:"1px solid #0f172a" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, paddingBottom:14 }}>
+          <div style={{ width:36, height:36, borderRadius:8, background:"linear-gradient(135deg,#10b981,#059669)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🕵️</div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "'Space Mono', monospace", letterSpacing: -0.5 }}>
-              <span style={{ color: "#06b6d4" }}>Competitor</span>
-              <span style={{ color: "#7c3aed" }}>Intel</span>
-              <span style={{ color: "#f1f5f9" }}> Pro</span>
-            </div>
-            <div style={{ color: "#475569", fontSize: 11 }}>AI-Powered Deep Competitive Intelligence</div>
+            <h1 style={{ margin:0, fontSize:17, fontWeight:800 }}>
+              Competitor <span style={{ color:"#10b981" }}>Intelligence</span>
+            </h1>
+            <p style={{ margin:0, fontSize:10, color:"#374151" }}>
+              🟢 Google PageSpeed &nbsp;·&nbsp; 🟢 Web Scraper &nbsp;·&nbsp; 🟢 OpenPageRank &nbsp;·&nbsp; 🟢 DNS &nbsp;·&nbsp; 🟢 AI Web Search
+            </p>
           </div>
         </div>
       </div>
 
-      
-      <div style={{ padding: "16px 20px", background: "#050d1a", borderBottom: "1px solid #0f2040" }}>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ color: "#475569", fontSize: 11, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Your Website (optional)</label>
-          <input
-            value={yourSite}
-            onChange={e => setYourSite(e.target.value)}
-            placeholder="yoursite.com"
-            style={{
-              width: "100%", background: "#0a1628", border: "1px solid #1e3a5f",
-              borderRadius: 10, padding: "10px 14px", color: "#f1f5f9", fontSize: 14,
-              fontFamily: "'Space Mono', monospace"
-            }}
-          />
+      {/* Form */}
+      <div style={{ padding:"14px 20px", borderBottom:"1px solid #0f172a" }}>
+        <div style={{ marginBottom:8 }}>
+          <label style={{ display:"block", color:"#4b5563", fontSize:10, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>Your Website (optional)</label>
+          <input value={yourSite} onChange={e=>setYourSite(e.target.value)} placeholder="yoursite.com" style={inputStyle}/>
         </div>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ color: "#475569", fontSize: 11, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Competitor Website *</label>
-          <input
-            value={compSite}
-            onChange={e => setCompSite(e.target.value)}
-            placeholder="competitor.com"
-            style={{
-              width: "100%", background: "#0a1628", border: "1px solid #1e3a5f",
-              borderRadius: 10, padding: "10px 14px", color: "#f1f5f9", fontSize: 14,
-              fontFamily: "'Space Mono', monospace"
-            }}
-          />
+        <div style={{ marginBottom:8 }}>
+          <label style={{ display:"block", color:"#4b5563", fontSize:10, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>Competitor Website *</label>
+          <input value={compSite} onChange={e=>setCompSite(e.target.value)} placeholder="competitor.com" style={{ ...inputStyle, border:`1px solid ${error?"#ef4444":"#1f2937"}` }}/>
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ color: "#475569", fontSize: 11, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Industry (optional)</label>
-          <input
-            value={industry}
-            onChange={e => setIndustry(e.target.value)}
-            placeholder="e.g. SaaS, E-commerce, FinTech..."
-            style={{
-              width: "100%", background: "#0a1628", border: "1px solid #1e3a5f",
-              borderRadius: 10, padding: "10px 14px", color: "#f1f5f9", fontSize: 14,
-              fontFamily: "'Space Mono', monospace"
-            }}
-          />
+        <div style={{ marginBottom:10 }}>
+          <label style={{ display:"block", color:"#4b5563", fontSize:10, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>Industry (optional)</label>
+          <input value={industry} onChange={e=>setIndustry(e.target.value)} placeholder="SaaS, E-commerce, FinTech..." style={inputStyle}/>
         </div>
-        {error && <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 8 }}>⚠️ {error}</div>}
-        <button
-          onClick={analyze}
-          disabled={loading}
-          style={{
-            width: "100%", padding: "12px",
-            background: loading ? "#1e293b" : "linear-gradient(135deg, #06b6d4, #7c3aed)",
-            border: "none", borderRadius: 10, color: "#fff",
-            fontSize: 14, fontWeight: 700, fontFamily: "'Space Mono', monospace",
-            cursor: loading ? "not-allowed" : "pointer",
-            letterSpacing: 0.5, transition: "opacity 0.2s"
-          }}
-        >
-          {loading ? "🔄 Analyzing..." : "🕵️ Run Deep Analysis"}
+        {error && <div style={{ background:"#7f1d1d30", border:"1px solid #ef444440", borderRadius:8, padding:"8px 12px", color:"#ef4444", fontSize:13, marginBottom:8 }}>⚠️ {error}</div>}
+        <button onClick={run} disabled={loading} style={{
+          width:"100%", padding:"12px", border:"none", borderRadius:8,
+          background:loading?"#1f2937":"linear-gradient(135deg,#10b981,#059669)",
+          color:loading?"#4b5563":"#fff", fontWeight:700, fontSize:14,
+          fontFamily:"monospace", cursor:loading?"not-allowed":"pointer",
+        }}>
+          {loading ? "🔄 Running Live Analysis..." : "🕵️ Run Live Analysis →"}
         </button>
       </div>
 
-      
+      {/* Progress */}
       {loading && (
-        <div style={{ padding: "20px", background: "#050d1a" }}>
-          <div style={{ color: "#06b6d4", fontSize: 12, marginBottom: 8, fontFamily: "'Space Mono', monospace" }}>{progressMsg}</div>
-          <div style={{ background: "#0f172a", borderRadius: 99, height: 6, overflow: "hidden", marginBottom: 6 }}>
-            <div style={{
-              width: `${progress}%`, height: "100%",
-              background: "linear-gradient(90deg, #06b6d4, #7c3aed)",
-              borderRadius: 99, transition: "width 0.8s ease"
-            }} />
+        <div style={{ padding:"14px 20px", borderBottom:"1px solid #0f172a" }}>
+          <p style={{ color:"#10b981", fontSize:12, margin:"0 0 6px", fontFamily:"monospace" }}>{STEPS[step]}</p>
+          <div style={{ background:"#1f2937", borderRadius:99, height:4, marginBottom:4 }}>
+            <div style={{ width:`${progress}%`, height:"100%", background:"linear-gradient(90deg,#10b981,#059669)", borderRadius:99, transition:"width 0.8s ease" }}/>
           </div>
-          <div style={{ color: "#334155", fontSize: 11, textAlign: "right" }}>{progress}%</div>
-          <div style={{
-            marginTop: 12, background: "#0a1628", border: "1px solid #0f2040",
-            borderRadius: 12, padding: 14
-          }}>
-            <div style={{ color: "#334155", fontSize: 11, lineHeight: 2 }}>
-              {["SEO Audit", "Backlinks", "Tech Stack", "Traffic", "Keywords", "Social", "Monetization"].map((s, i) => (
-                <span key={s} style={{ marginRight: 12 }}>
-                  <span style={{ color: progress > (i + 1) * 13 ? "#22c55e" : "#334155" }}>
-                    {progress > (i + 1) * 13 ? "✓" : "○"}
-                  </span> {s}
-                </span>
-              ))}
+          <p style={{ color:"#374151", fontSize:10, margin:0, textAlign:"right", fontFamily:"monospace" }}>{progress}% — ~25 seconds</p>
+        </div>
+      )}
+
+      {/* Score bar */}
+      {result && (
+        <div style={{ padding:"10px 20px", borderBottom:"1px solid #0f172a", display:"flex", gap:12, overflowX:"auto", background:"#030712" }}>
+          {[
+            ["⚡", "perf",  result.performance?.mob_perf],
+            ["🔍", "seo",   result.seo_on_page?.score],
+            ["⚙️", "tech",  result.technical?.score],
+            ["📊", "traffic",result.traffic?.score],
+            ["🔗", "links", result.seo_off_page?.score],
+            ["🗝️", "kw",   result.keywords?.score],
+            ["📡", "social",result.social?.score],
+            ["💰", "rev",   result.monetization?.score],
+          ].map(([icon, label, sc]) => {
+            if (!sc) return null;
+            const s = Number(sc);
+            const c = score2color(s);
+            const tabMap: Record<string,string> = { perf:"performance", seo:"seo", tech:"technical", traffic:"traffic", links:"backlinks", kw:"keywords", social:"social", rev:"monetization" };
+            return (
+              <div key={label as string} style={{ textAlign:"center", minWidth:40, cursor:"pointer" }} onClick={()=>setActiveTab(tabMap[label as string]||"overview")}>
+                <div style={{ fontSize:12 }}>{icon as string}</div>
+                <div style={{ color:c, fontSize:14, fontWeight:700, fontFamily:"monospace" }}>{s}</div>
+                <div style={{ color:"#374151", fontSize:9 }}>{String(label).toUpperCase()}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Tabs */}
+      {result && (
+        <div style={{ display:"flex", overflowX:"auto", borderBottom:"1px solid #0f172a" }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{
+              background:"none", border:"none",
+              borderBottom: activeTab===t.id ? "2px solid #10b981" : "2px solid transparent",
+              color: activeTab===t.id ? "#10b981" : "#4b5563",
+              padding:"9px 13px", cursor:"pointer", fontSize:11,
+              fontFamily:"monospace", whiteSpace:"nowrap",
+            }}>{t.icon} {t.label}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      <div style={{ padding: result ? "14px 20px 80px" : "40px 20px" }}>
+        {!loading && !result && (
+          <div style={{ textAlign:"center", padding:"20px 0" }}>
+            <div style={{ fontSize:48, marginBottom:10 }}>🕵️</div>
+            <p style={{ color:"#1f2937", fontSize:14, lineHeight:2 }}>
+              Enter competitor URL to get<br/>
+              <span style={{ color:"#10b981" }}>LIVE PageSpeed · Real Tech Stack · DNS Info</span><br/>
+              <span style={{ color:"#6b7280" }}>Web-Searched Traffic · Social · Revenue · Battle Plan</span>
+            </p>
+            <div style={{ marginTop:12, background:"#0d1117", border:"1px solid #1f2937", borderRadius:10, padding:14, textAlign:"left" }}>
+              <p style={{ color:"#374151", fontSize:11, margin:"0 0 6px" }}>💡 Optional: Add OPEN_PAGERANK_API_KEY to .env.local for real domain authority</p>
+              <p style={{ color:"#374151", fontSize:11, margin:0 }}>💡 Optional: Add GOOGLE_PAGESPEED_API_KEY for higher rate limits</p>
             </div>
           </div>
-        </div>
-      )}
-
-      
-      {result && (
-        <div>
-          
-          <div style={{
-            background: "#050d1a", borderBottom: "1px solid #0f2040",
-            padding: "12px 20px", display: "flex", gap: 10, overflowX: "auto"
-          }}>
-            {["seo", "content", "technical", "social", "traffic", "backlinks"].map(key => {
-              const s = result[key]?.score;
-              if (!s) return null;
-              return (
-                <div key={key} style={{ textAlign: "center", minWidth: 48 }}>
-                  <div style={{ color: tabColor(key), fontSize: 14, fontWeight: 700 }}>{s}</div>
-                  <div style={{ color: "#334155", fontSize: 9, textTransform: "uppercase" }}>{key.slice(0, 4)}</div>
-                </div>
-              );
-            })}
-          </div>
-
-          
-          <div style={{
-            display: "flex", overflowX: "auto", gap: 0,
-            borderBottom: "1px solid #0f2040", background: "#050d1a"
-          }}>
-            {SECTIONS.map(s => (
-              <button key={s.id} onClick={() => setActiveTab(s.id)} style={{
-                background: "none", border: "none",
-                borderBottom: activeTab === s.id ? `2px solid ${tabColor(s.id)}` : "2px solid transparent",
-                color: activeTab === s.id ? tabColor(s.id) : "#475569",
-                padding: "10px 14px", cursor: "pointer",
-                fontSize: 11, fontFamily: "'Space Mono', monospace",
-                whiteSpace: "nowrap", transition: "all 0.2s"
-              }}>{s.icon} {s.label}</button>
-            ))}
-          </div>
-
-          
-          <div style={{ padding: "16px 20px 60px" }}>
-            {renderSection()}
-          </div>
-        </div>
-      )}
-
-      
-      {!loading && !result && (
-        <div style={{ padding: 40, textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🕵️</div>
-          <div style={{ color: "#1e3a5f", fontSize: 14, lineHeight: 1.8 }}>
-            Enter a competitor URL to get<br />
-            <span style={{ color: "#06b6d4" }}>SEO · Traffic · Tech · Social</span><br />
-            <span style={{ color: "#7c3aed" }}>Backlinks · Keywords · Revenue</span><br />
-            and full Battle Plan
-          </div>
-        </div>
-      )}
+        )}
+        {renderSection()}
+      </div>
     </div>
   );
-        }
-    
-    
+                       }
