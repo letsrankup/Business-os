@@ -15,7 +15,6 @@ function getDomain(raw: string): string {
   }
 }
 
-// ── 1. PageSpeed Logic with strict timeout ────────────────────────────────────
 async function fetchPageSpeed(url: string) {
   try {
     const key = process.env.GOOGLE_PAGESPEED_API_KEY ? `&key=${process.env.GOOGLE_PAGESPEED_API_KEY}` : "";
@@ -50,7 +49,6 @@ async function fetchPageSpeed(url: string) {
   }
 }
 
-// ── 2. HTML Scraper ───────────────────────────────────────────────────────────
 async function scrapeUrl(url: string) {
   try {
     const res = await fetch(cleanUrl(url), {
@@ -76,7 +74,6 @@ async function scrapeUrl(url: string) {
   }
 }
 
-// ── 3. PageRank ───────────────────────────────────────────────────────────────
 async function fetchPageRank(domain: string) {
   try {
     const key = process.env.OPEN_PAGERANK_API_KEY;
@@ -97,7 +94,6 @@ async function fetchPageRank(domain: string) {
   }
 }
 
-// ── 4. DNS Meta ───────────────────────────────────────────────────────────────
 async function fetchDNS(domain: string) {
   try {
     const res = await fetch(`https://dns.google/resolve?name=${domain}&type=A`, {
@@ -114,10 +110,9 @@ async function fetchDNS(domain: string) {
   }
 }
 
-// ── 5. Claude Intelligent Synthesis ───────────────────────────────────────────
 async function claudeWebSearch(compUrl: string, yourUrl: string, ind: string, ps: any, sc: any, pr: any, dns: any) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("Anthropic API key is missing in Environment Variables.");
+  if (!apiKey) throw new Error("Anthropic API key is completely missing inside dashboard environment configuration.");
 
   const prompt = `You are an elite Competitive Intelligence Engine. Analyze competitor: ${compUrl}.
   Our context: ${yourUrl || "N/A"}. Industry: ${ind || "General"}.
@@ -128,7 +123,7 @@ async function claudeWebSearch(compUrl: string, yourUrl: string, ind: string, ps
   - PageRank: ${JSON.stringify(pr)}
   - DNS: ${JSON.stringify(dns)}
 
-  Synthesize an extremely high-fidelity intelligence report. Return ONLY a single raw JSON object matching this structural layout exactly with no formatting wrappers, no markdown codeblocks, and no conversation:
+  Synthesize an extremely high-fidelity intelligence report. Return ONLY a single raw JSON object matching this structural layout exactly with no markdown wrappers, no backticks, and no conversation:
   {
     "overview": { "name": "string", "domain": "string", "industry": "string", "threat_level": "High|Medium|Low", "market_position": "string", "founded": "string", "employees": "string", "headquarters": "string", "funding": "string", "business_model": "string", "target_audience": "string", "value_prop": "string", "summary": "string", "overall_score": 80 },
     "performance": { "mob_perf": 75, "desk_perf": 85, "mob_access": 80, "mob_seo": 85, "mob_bp": 80, "lcp": "string", "tbt": "string", "cls": "string", "ttfb": "string", "fcp": "string", "size": "string", "grade": "A", "issues": ["string"], "fixes": ["string"] },
@@ -154,10 +149,10 @@ async function claudeWebSearch(compUrl: string, yourUrl: string, ind: string, ps
       max_tokens: 3500,
       messages: [{ role: "user", content: prompt }]
     }),
-    signal: AbortSignal.timeout(6000) // 6 seconds limit for safe response generation
+    signal: AbortSignal.timeout(6000)
   });
 
-  if (!response.ok) throw new Error(`Claude AI API responded with status ${response.status}`);
+  if (!response.ok) throw new Error(`Claude AI Core responded with failure status ${response.status}`);
   const data = await response.json();
   const text = (data.content ?? [])
     .filter((b: { type: string }) => b.type === "text")
@@ -165,7 +160,7 @@ async function claudeWebSearch(compUrl: string, yourUrl: string, ind: string, ps
     .join("");
 
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("Claude did not return a valid structured object.");
+  if (!match) throw new Error("Critical structural breach: Response failed deep schema verification checks.");
   return JSON.parse(match[0]);
 }
 
@@ -173,12 +168,11 @@ export async function POST(req: NextRequest) {
   try {
     const { yourSite = "", compSite = "", industry = "" } = await req.json();
     if (!compSite.trim()) {
-      return NextResponse.json({ success: false, error: "Competitor URL must be provided." }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Competitor URL target config setup incomplete." }, { status: 400 });
     }
 
     const domain = getDomain(compSite);
 
-    // Run diagnostics concurrently with ultra-safe limits
     const [ps, sc, pr, dns] = await Promise.all([
       fetchPageSpeed(compSite),
       scrapeUrl(compSite),
@@ -202,10 +196,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: analysis });
   } catch (error: any) {
-    console.error("Backend Thread Error:", error);
+    console.error("Backend Core Error Logger:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Internal Engine Sync Failure." },
+      { success: false, error: error.message || "Fatal synchronization error inside intelligence pipeline." },
       { status: 500 }
     );
   }
-            }
+      }
+      
