@@ -127,8 +127,15 @@ async function scrapeUrl(url: string) {
       open_graph:      has('property="og:'),
       twitter_card:    has('name="twitter:'),
       robots_meta:     has('name="robots"'),
-      schema_types:    [...new Set((html.match(/"@type"\s*:\s*"([^"]+)"/g) || []).map(m => m.replace(/"@type"\s*:\s*"/, "").replace(/"/, "")))].slice(0, 6),
-      tech_detected:   [...new Set(tech)],
+      schema_types: Array.from(
+  new Set(
+    (html.match(/"@type"\s*:\s*"([^"]+)"/g) || []).map((m: string) =>
+      m.replace(/"@type"\s*:\s*"/, "").replace(/"/g, "")
+    )
+  )
+).slice(0, 6),
+
+tech_detected: Array.from(new Set<string>(tech)),
       security_headers: secHeaders,
       link_count:      (html.match(/href=/gi) || []).length,
       image_count:     (html.match(/<img /gi) || []).length,
