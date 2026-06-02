@@ -9,7 +9,10 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(false);
   const [leads, setLeads] = useState<any[]>([]);
   const [error, setError] = useState("");
-
+  const [loadingLeadId, setLoadingLeadId] = useState<string | null>(null);
+const [selectedProposal, setSelectedProposal] = useState<any>(null);
+const [isModalOpen, setIsModalOpen] = useState(false);
+  
   const discover = async () => {
     if (!query) return;
     setLoading(true); setError(""); setLeads([]);
