@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase Client Initialize karo (Apne env variables ke mutabiq)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Next.js ko static optimization check karne se rokne ke liye
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    // Client initialization ko function ke andar move kar diya taaki build crash na ho
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json(
+        { success: false, error: "Missing Supabase Environment Variables" },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
     const { leadName, leadEmail, companyName, description, industry, userId } = await req.json();
 
     // 1. OpenRouter AI se personalized email generate karwana
@@ -23,18 +34,16 @@ export async function POST(req: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3-8b-instruct:free", // Tum apna preferred model lagana
+        model: "meta-llama/llama-3-8b-instruct:free",
         messages: [{ role: "user", content: systemPrompt }],
         response_format: { type: "json_object" }
       }),
     });
 
     const aiData = await response.json();
-    
-    // AI ka response parse karna
     const generatedContent = JSON.parse(aiData.choices[0].message.content);
 
-    // 2. Newly generated data ko Supabase ki proposals table mein insert karna
+    // 2. Data ko Supabase ki proposals table mein insert karna
     const { data: proposal, error: dbError } = await supabase
       .from('proposals')
       .insert([
@@ -53,7 +62,6 @@ export async function POST(req: Request) {
 
     if (dbError) throw dbError;
 
-    // Frontend ko data return karna taaki Modal mein show ho sake
     return NextResponse.json({ success: true, proposal });
 
   } catch (error: any) {
