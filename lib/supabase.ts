@@ -74,3 +74,4 @@ export async function resetPassword(email: string) {
   });
   if (error) throw new Error(error.message);
     }
+    
