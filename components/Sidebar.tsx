@@ -18,7 +18,6 @@ const NAV = [
     href: "/competitor",
     icon: "⚔️"
   }
-  
 ];
 
 export default function Sidebar({ open = true }: { open?: boolean }) {
@@ -27,6 +26,12 @@ export default function Sidebar({ open = true }: { open?: boolean }) {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    // Strict Type Safety Check: Agar supabase null hai to compiler safe exit karega
+    if (!supabase) {
+      console.warn("Supabase client is null inside Sidebar component.");
+      return;
+    }
+
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setUser(data.user);
     });
@@ -112,4 +117,4 @@ export default function Sidebar({ open = true }: { open?: boolean }) {
       </div>
     </aside>
   );
-              }
+}
