@@ -5,7 +5,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // ── Lead Card Propose Button ──────────────────────────────
     if (body.lead) {
       const { lead } = body;
 
@@ -29,7 +28,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, proposal });
     }
 
-    // ── Full Proposal Form ────────────────────────────────────
     if (!body.clientName || !body.projectDescription) {
       return NextResponse.json(
         { error: "clientName and projectDescription are required" },
@@ -60,4 +58,5 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-  }
+}
+  
