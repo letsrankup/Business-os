@@ -35,11 +35,16 @@ export default function InvoicePage() {
   }, []);
 
   const fetchInvoices = async () => {
+    // Strict Check: TypeScript error fix karne ke liye
+    if (!supabase) {
+      console.warn("Supabase client is null or not configured.");
+      return;
+    }
     const { data } = await supabase
       .from("invoices")
       .select("*")
       .order("created_at", { ascending: false });
-    if (data) setInvoices(data);
+    if (data) setInvoices(data as any);
   };
 
   const addItem = () => {
@@ -51,11 +56,16 @@ export default function InvoicePage() {
   };
 
   const getTotal = (invoiceItems: InvoiceItem[]) => {
-    return invoiceItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    return invoiceItems ? invoiceItems.reduce((sum, item) => sum + item.quantity * item.price, 0) : 0;
   };
 
   const createInvoice = async () => {
     if (!clientName || !dueDate) return;
+    // Strict Check: Taake compiler crash na ho
+    if (!supabase) {
+      console.error("Supabase client is null.");
+      return;
+    }
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("invoices").insert({
@@ -78,6 +88,7 @@ export default function InvoicePage() {
   };
 
   const updateStatus = async (id: string, status: "paid" | "unpaid" | "pending") => {
+    if (!supabase) return;
     await supabase.from("invoices").update({ status }).eq("id", id);
     await fetchInvoices();
   };
@@ -217,7 +228,7 @@ export default function InvoicePage() {
                 </div>
               </div>
               <div className="border-t border-white/5 pt-3">
-                {invoice.items.map((item) => (
+                {invoice.items && invoice.items.map((item) => (
                   <div key={item.id} className="flex justify-between text-xs text-gray-400">
                     <span>{item.description}</span>
                     <span>{item.quantity} x ${item.price} = ${item.quantity * item.price}</span>
@@ -230,4 +241,4 @@ export default function InvoicePage() {
       </div>
     </div>
   );
-             }
+                      }
