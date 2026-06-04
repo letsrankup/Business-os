@@ -19,7 +19,7 @@ async function chat(
         body: JSON.stringify({
           model: MODEL,
           messages,
-          max_tokens: 2000,
+          max_tokens: 3000, // Token limit badha di taake lambi leads list truncate na ho
           temperature: 0.7,
         }),
       });
@@ -45,7 +45,8 @@ function cleanJSON(text: string): any {
   try {
     const cleaned = text
       .replaceAll("```json", "")
-      .replaceAll("```", "")
+      .replaceAll("
+```", "")
       .trim();
     const start = cleaned.search(/[\[{]/);
     if (start === -1) throw new Error("No JSON found");
@@ -234,18 +235,24 @@ interface LeadsParams {
   count: number;
 }
 
+// Fixed function for more leads generation and scrolling
 export async function discoverLeads(params: LeadsParams) {
   const { query, industry, count } = params;
+  
+  // Agar front-end se count chota aa raha hai to hum automatically 15 se 20 leads generate karwayenge
+  const targetCount = count && count > 6 ? count : 15;
 
   const text = await chat([
     {
       role: "user",
-      content: `You are a B2B sales expert. Generate ${count} business leads.
+      content: `You are a B2B sales expert. Generate EXACTLY ${targetCount} unique and realistic business leads.
+      
+Target Description/Query: ${query}
+Target Industry: ${industry}
 
-Target: ${query}
-Industry: ${industry}
+You MUST return a JSON array containing EXACTLY ${targetCount} distinct objects. Make sure the output scrolls down extensively with high quality data.
 
-Reply with ONLY a valid JSON array, no explanation, no markdown:
+Reply with ONLY a valid JSON array, no explanation, no markdown format outside the array:
 [
   {
     "name": "Full Name",
@@ -254,49 +261,30 @@ Reply with ONLY a valid JSON array, no explanation, no markdown:
     "email": "email@company.com",
     "website": "https://company.com",
     "industry": "${industry}",
-    "score": 85,
-    "description": "Why this is a good lead"
+    "score": 90,
+    "description": "Detailed reasoning why this is a prime prospect based on their stack and targets."
   }
 ]
 
-Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
+Make realistic fictional data. Scores range: 85-98=hot, 70-84=warm. Ensure the array has exactly ${targetCount} items inside it.`,
     },
   ]);
 
   const parsed = cleanJSON(text);
   if (Array.isArray(parsed)) return parsed;
-  if (parsed?.leads) return parsed.leads;
+  if (parsed?.leads && Array.isArray(parsed.leads)) return parsed.leads;
 
+  // Extensive fallbacks list agar API limit touch ho to screen khali na rahe
   return [
-    {
-      name: "Sarah Johnson",
-      company: "TechFlow Inc",
-      role: "CEO",
-      email: "sarah@techflow.com",
-      website: "https://techflow.com",
-      industry,
-      score: 92,
-      description: "Fast-growing company actively seeking marketing solutions.",
-    },
-    {
-      name: "Ahmed Raza",
-      company: "Digital Ventures",
-      role: "Marketing Director",
-      email: "ahmed@digitalv.com",
-      website: "https://digitalv.com",
-      industry,
-      score: 78,
-      description: "Established firm looking to expand digital presence.",
-    },
-    {
-      name: "Priya Sharma",
-      company: "StartupHub",
-      role: "Founder",
-      email: "priya@startuphub.io",
-      website: "https://startuphub.io",
-      industry,
-      score: 85,
-      description: "Early-stage startup with budget for growth services.",
-    },
+    { name: "Sara Al-Mansouri", company: "CloudPulse Solutions", role: "Vice President of Product", email: "sara.a@cloudpulse.com", website: "https://cloudpulse.com", industry, score: 92, description: "Leads product strategy for a fast-growing SaaS platform." },
+    { name: "Omar Khalid", company: "NexaSoft", role: "Chief Technology Officer", email: "omar.khalid@nexasoft.io", website: "https://nexasoft.io", industry, score: 88, description: "CTO of a mid-size SaaS provider focusing on cloud security." },
+    { name: "Laila Rahman", company: "DataSphere Labs", role: "Head of Customer Success", email: "laila.rahman@dataspherelabs.com", website: "https://dataspherelabs.com", industry, score: 81, description: "Oversees retention and expansion for data analytics SaaS." },
+    { name: "Faisal Yusuf", company: "SyncWave", role: "Director of Sales", email: "faisal.yusuf@syncwave.io", website: "https://syncwave.io", industry, score: 75, description: "Manages a sales team targeting enterprise SaaS contracts." },
+    { name: "Aisha Patel", company: "PrismShift", role: "Chief Executive Officer", email: "aisha.patel@prismshift.com", website: "https://prismshift.com", industry, score: 96, description: "Founder/CEO of a high-growth SaaS startup." },
+    { name: "Khaled Nasser", company: "MetroMetrics", role: "Product Manager", email: "khaled.nasser@metro-metrics.com", website: "https://metro-metrics.com", industry, score: 68, description: "Handles product roadmap for a niche SaaS analytics tool." },
+    { name: "Zainab Baloch", company: "Apex Automation", role: "Operations Lead", email: "zainab@apexauto.com", website: "https://apexauto.com", industry, score: 89, description: "Looking for advanced AI tools to scale their current SaaS flows." },
+    { name: "Tariq Malik", company: "Vortex Digital", role: "Managing Director", email: "tariq@vortexdigital.com", website: "https://vortexdigital.com", industry, score: 84, description: "Expanding their portfolio into automated client acquisition." },
+    { name: "Yasmine Edge", company: "CoreSaaS Labs", role: "Technical Co-Founder", email: "yasmine@coresaas.io", website: "https://coresaas.io", industry, score: 91, description: "Building core architecture, actively scaling tech partnerships." },
+    { name: "Hamza Rind", company: "Falcon Services", role: "Growth Hacker", email: "hamza@falcongrowth.com", website: "https://falcongrowth.com", industry, score: 95, description: "Looking to deploy automated lead funnels for SaaS platforms." }
   ];
-        }
+  }
