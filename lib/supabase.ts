@@ -3,7 +3,6 @@ import { createBrowserClient } from "@supabase/ssr";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-// Safe check — crash na ho agar env vars missing hain
 export const isSupabaseReady = !!(supabaseUrl && supabaseKey);
 
 export const supabase = isSupabaseReady
@@ -15,7 +14,11 @@ export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseKey);
 }
 
-export async function signUp(email: string, password: string, fullName: string) {
+export async function signUp(
+  email: string,
+  password: string,
+  fullName: string
+) {
   if (!supabase) throw new Error("Supabase not configured");
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -38,7 +41,8 @@ export async function signIn(email: string, password: string) {
 
 export async function signInWithGoogle() {
   if (!supabase) throw new Error("Supabase not configured");
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo: `${origin}/dashboard` },
@@ -55,15 +59,18 @@ export async function signOut() {
 
 export async function getCurrentUser() {
   if (!supabase) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   return user;
 }
 
 export async function resetPassword(email: string) {
   if (!supabase) throw new Error("Supabase not configured");
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/reset-password`,
   });
   if (error) throw new Error(error.message);
-}
+  }
