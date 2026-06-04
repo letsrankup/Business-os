@@ -1,4 +1,4 @@
-const OPENROUTER_BASE = "[https://openrouter.ai/api/v1](https://openrouter.ai/api/v1)";
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const MODEL = "openrouter/auto";
 
 async function chat(
@@ -252,7 +252,7 @@ Reply with ONLY a valid JSON array, no explanation, no markdown:
     "company": "Company Name",
     "role": "Job Title",
     "email": "email@company.com",
-    "website": "[https://company.com](https://company.com)",
+    "website": "https://company.com",
     "industry": "${industry}",
     "score": 85,
     "description": "Why this is a good lead"
@@ -273,7 +273,7 @@ Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
       company: "TechFlow Inc",
       role: "CEO",
       email: "sarah@techflow.com",
-      website: "[https://techflow.com](https://techflow.com)",
+      website: "https://techflow.com",
       industry,
       score: 92,
       description: "Fast-growing company actively seeking marketing solutions.",
@@ -283,7 +283,7 @@ Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
       company: "Digital Ventures",
       role: "Marketing Director",
       email: "ahmed@digitalv.com",
-      website: "[https://digitalv.com](https://digitalv.com)",
+      website: "https://digitalv.com",
       industry,
       score: 78,
       description: "Established firm looking to expand digital presence.",
@@ -293,11 +293,10 @@ Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
       company: "StartupHub",
       role: "Founder",
       email: "priya@startuphub.io",
-      website: "[https://startuphub.io](https://startuphub.io)",
+      website: "https://startuphub.io",
       industry,
       score: 85,
       description: "Early-stage startup with budget for growth services.",
     },
   ];
-                                   }
-  
+        }
