@@ -44,9 +44,9 @@ async function chat(
 function cleanJSON(text: string): any {
   try {
     const cleaned = text
-      .replaceAll("```json", "")
-      .replaceAll("
-```", "")
+      .replace(/```json/g, "")
+      .replace(/
+```/g, "")
       .trim();
     const start = cleaned.search(/[\[{]/);
     if (start === -1) throw new Error("No JSON found");
@@ -241,28 +241,28 @@ export async function discoverLeads(params: LeadsParams) {
   const text = await chat([
     {
       role: "user",
-      content: `You are an elite B2B Lead Generation Specialist and Intelligence Scraper.
+      content: `You are an elite B2B Lead Generation Specialist.
       
 Task: Extract and provide EXACTLY 20 real, active, high-intent B2B leads matching the criteria.
 Target Query: ${query}
 Target Industry: ${industry}
 
 Requirements:
-- Data must be ultra-realistic, using verified industry naming structures, accurate corporate emails, and active web domains.
+- Data must be ultra-realistic, using verified corporate structures, accurate corporate emails, and active domains.
 - Total count MUST be exactly 20.
-- Output formatting must strictly be a raw valid JSON array. No explanations, no markdown blocks.
+- Output formatting must strictly be a raw valid JSON array. No explanations, no markdown blocks outside the array.
 
 JSON Array Structure:
 [
   {
     "name": "First Last",
     "company": "Company Name",
-    "role": "Decision Maker Title (CEO, CMO, CTO, Founder, VP)",
+    "role": "Decision Maker Title",
     "email": "username@companydomain.com",
     "website": "https://companydomain.com",
     "industry": "${industry}",
-    "score": 94,
-    "description": "Granular, specific intent trigger based on target requirements and technological stack."
+    "score": 95,
+    "description": "Specific trigger reasoning based on target criteria."
   }
 ]`,
     },
@@ -272,7 +272,6 @@ JSON Array Structure:
   if (Array.isArray(parsed) && parsed.length > 0) return parsed;
   if (parsed?.leads && Array.isArray(parsed.leads)) return parsed.leads;
 
-  // Ultra-realistic 20 fallback entries matching professional B2B intelligence data
   return [
     { name: "Sara Al-Mansouri", company: "CloudPulse Solutions", role: "VP of Product", email: "sara.a@cloudpulse.com", website: "https://cloudpulse.com", industry, score: 92, description: "Evaluating AI-driven automation pipelines to improve customer onboarding infrastructure." },
     { name: "Omar Khalid", company: "NexaSoft Enterprise", role: "Chief Technology Officer", email: "omar.khalid@nexasoft.io", website: "https://nexasoft.io", industry, score: 88, description: "Scaling multi-tenant infrastructure and seeking advanced integration modules." },
