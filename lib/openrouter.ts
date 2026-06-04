@@ -296,3 +296,4 @@ JSON Array Structure:
     { name: "Rachel Adams", company: "Apex Systems", role: "Managing Director", email: "rachel.adams@apexsystems.io", website: "https://apexsystems.io", industry, score: 85, description: "Acquiring premium integration tools to scale customer data synchronizations seamlessly." }
   ];
   }
+  
