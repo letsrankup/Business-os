@@ -1,9 +1,6 @@
-// lib/openrouter.ts
-
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const MODEL = "openrouter/auto";
 
-// ─── Core Chat Function ───────────────────────────────────────
 async function chat(
   messages: { role: string; content: string }[],
   retries = 3
@@ -44,12 +41,12 @@ async function chat(
   throw new Error("All retries failed");
 }
 
-// ─── JSON Cleaner ─────────────────────────────────────────────
 function cleanJSON(text: string): any {
   try {
     const cleaned = text
       .replace(/```json/gi, "")
-      .replace(/```/gi, "")
+      .replace(/
+```/gi, "")
       .trim();
     const start = cleaned.search(/[\[{]/);
     if (start === -1) throw new Error("No JSON found");
@@ -59,7 +56,6 @@ function cleanJSON(text: string): any {
   }
 }
 
-// ─── SEO Audit ────────────────────────────────────────────────
 export async function generateAuditReport(url: string) {
   const text = await chat([
     {
@@ -109,7 +105,6 @@ Reply with ONLY valid JSON, no explanation, no markdown:
   };
 }
 
-// ─── Content Generation ───────────────────────────────────────
 interface ContentParams {
   contentType: string;
   topic: string;
@@ -155,7 +150,6 @@ Write the content now:`,
   ]);
 }
 
-// ─── Full Proposal Generator ──────────────────────────────────
 interface ProposalParams {
   clientName: string;
   clientBusiness?: string;
@@ -200,7 +194,6 @@ Write it professionally and persuasively.`,
   ]);
 }
 
-// ─── Lead Card Propose Button ─────────────────────────────────
 interface LeadProposalParams {
   name: string;
   company: string;
@@ -236,7 +229,6 @@ Make it warm, professional, and specific to their situation.`,
   ]);
 }
 
-// ─── Lead Discovery ───────────────────────────────────────────
 interface LeadsParams {
   query: string;
   industry: string;
@@ -308,4 +300,5 @@ Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
       description: "Early-stage startup with budget for growth services.",
     },
   ];
-  }
+        }
+    
