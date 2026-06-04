@@ -43,10 +43,11 @@ async function chat(
 
 function cleanJSON(text: string): any {
   try {
+    // Bina kisi regex slash ke cleanly string replace lagaya hai taake syntax fail na ho
     const cleaned = text
-      .replace(/```json/gi, "")
-      .replace(/
-```/gi, "")
+      .replaceAll("```json", "")
+      .replaceAll("
+```", "")
       .trim();
     const start = cleaned.search(/[\[{]/);
     if (start === -1) throw new Error("No JSON found");
@@ -300,5 +301,5 @@ Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
       description: "Early-stage startup with budget for growth services.",
     },
   ];
-        }
+          }
     
