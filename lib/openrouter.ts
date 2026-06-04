@@ -43,11 +43,9 @@ async function chat(
 
 function cleanJSON(text: string): any {
   try {
-    const cleaned = text
-      .replace(/```json/g, "")
-      .replace(/
-```/g, "")
-      .trim();
+    // Regex ko khatam kar ke seedha robust string split/join use kiya hai taake build break na ho
+    let cleaned = text.split("```json").join("").split("
+```").join("").trim();
     const start = cleaned.search(/[\[{]/);
     if (start === -1) throw new Error("No JSON found");
     return JSON.parse(cleaned.slice(start));
@@ -294,5 +292,5 @@ JSON Array Structure:
     { name: "Hassan Al-Rind", company: "Falcon Tech Services", role: "Growth Architect", email: "hassan@falcontech.services", website: "https://falcontech.services", industry, score: 97, description: "Deploying production-grade automated outbound networks to target enterprise SaaS contracts." },
     { name: "Rachel Adams", company: "Apex Systems", role: "Managing Director", email: "rachel.adams@apexsystems.io", website: "https://apexsystems.io", industry, score: 85, description: "Acquiring premium integration tools to scale customer data synchronizations seamlessly." }
   ];
-  }
+}
   
