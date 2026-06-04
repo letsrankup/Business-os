@@ -23,10 +23,22 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchRealUserData() {
       try {
+        // Strict safe verification: Agar supabase variable null ho toh aage run na ho aur build crash na kare
+        if (!supabase) {
+          console.warn("Supabase configuration is missing or client is null.");
+          setLoading(false);
+          return;
+        }
+
         // 1. Logged-in user ki details nikalna
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: userData, error: authError } = await supabase.auth.getUser();
         
-        if (!user) return;
+        if (authError || !userData?.user) {
+          setLoading(false);
+          return;
+        }
+
+        const user = userData.user;
 
         // 2. Alag alag tables se sirf is user ka real data count fetch karna
         const [auditsRes, contentRes, leadsRes, proposalsRes] = await Promise.all([
@@ -46,7 +58,6 @@ export default function DashboardPage() {
         });
 
         // 3. Activity log ko real banana (Agar tables se real activity chahiye ho baad mein)
-        // Abhi design barkrar rakhne ke liye hum tab tak empty ya filtered activity dikha sakte hain
         setRecentActivity([]); 
 
       } catch (error) {
@@ -79,7 +90,6 @@ export default function DashboardPage() {
 
   return (
     <AppLayout title="Dashboard">
-      {/* Header layout unchanged */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-white">AI Business <span className="text-[#00f5a0]">OS</span></h1>
@@ -90,12 +100,10 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* Grid design unchanged */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {stats.map((s, i) => <DashboardCard key={i} {...s} />)}
+        {stats.map((s, i) => <DashboardCard key="{i}" {...s}/>)}
       </div>
 
-      {/* Activities & Quick Actions Design Unchanged */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-[#12121a] border border-white/10 rounded-2xl p-5">
           <h2 className="font-bold text-white mb-4 text-sm">Recent Activity</h2>
@@ -123,8 +131,7 @@ export default function DashboardPage() {
           <h2 className="font-bold text-white mb-4 text-sm">Quick Actions</h2>
           <div className="space-y-2">
             {quickActions.map((a, i) => (
-              <Link key={i} href={a.href}
-                className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-[#00f5a0]/10 hover:border-[#00f5a0]/30 border border-transparent transition-all group">
+              <Link key="{i}" href="{a.href}" className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-[#00f5a0]/10 hover:border-[#00f5a0]/30 border border-transparent transition-all group">
                 <span>{a.icon}</span>
                 <span className="text-sm text-gray-300 group-hover:text-[#00f5a0] transition-colors">{a.label}</span>
                 <span className="ml-auto text-gray-600 group-hover:text-[#00f5a0]">→</span>
@@ -135,4 +142,5 @@ export default function DashboardPage() {
       </div>
     </AppLayout>
   );
-}
+          }
+                        
