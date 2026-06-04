@@ -1,72 +1,55 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { supabase, isSupabaseAvailable } from '@/lib/supabase'
+import { NextRequest, NextResponse } from "next/server";
+import { generateProposal, generateLeadProposal } from "@/lib/openrouter";
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json()
-    const { lead } = body
+    const body = await req.json();
 
-    if (!lead) {
-      return NextResponse.json(
-        { success: false, error: 'Lead data missing' },
-        { status: 400 }
-      )
-    }
+    // Lead card se aaya proposal (Leads page)
+    if (body.lead) {
+      const { lead } = body;
 
-    // AI se proposal generate karo
-    const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [
-          {
-            role: 'user',
-            content: `Write a professional business proposal for:
-Name: ${lead.name}
-Company: ${lead.company}
-Title: ${lead.title || 'Decision Maker'}
-Industry: ${lead.industry || 'Technology'}
-
-Keep it concise, persuasive, and professional. Max 3 paragraphs.`,
-          },
-        ],
-      }),
-    })
-
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text()
-      console.error('AI Error:', errText)
-      return NextResponse.json(
-        { success: false, error: 'AI proposal generation failed' },
-        { status: 500 }
-      )
-    }
-
-    const aiData = await aiResponse.json()
-    const proposal = aiData.content?.[0]?.text || ''
-
-    // Agar Supabase available hai to save karo, warna skip karo
-    if (isSupabaseAvailable && supabase) {
-      await supabase.from('proposals').insert({
-        lead_name: lead.name,
-        lead_company: lead.company,
-        proposal_text: proposal,
-        created_at: new Date().toISOString(),
-      })
-    }
-
-    return NextResponse.json({ success: true, proposal })
-  } catch (error: any) {
-    console.error('Proposal route error:', error)
-    return NextResponse.json(
-      { success: false, error: error.message || 'Unknown error' },
-      { status: 500 }
-    )
-  }
+      if (!lead.name || !lead.company) {
+        return NextResponse.json(
+          { error: "Lead name and company are required" },
+          { status: 400 }
+        );
       }
+
+      const proposal = await generateLeadProposal({
+        name: lead.name,
+        company: lead.company,
+        title: lead.title,
+        industry: lead.industry,
+        description: lead.description,
+      });
+
+      return NextResponse.json({ success: true, proposal });
+    }
+
+    // Full proposal form se aaya
+    if (!body.clientName || !body.projectDescription) {
+      return NextResponse.json(
+        { error: "clientName and projectDescription are required" },
+        { status: 400 }
+      );
+    }
+
+    const proposal = await generateProposal({
+      clientName: body.clientName,
+      projectDescription: body.projectDescription,
+      budget: body.budget,
+      timeline: body.timeline,
+      industry: body.industry,
+    });
+
+    return NextResponse.json({ success: true, proposal });
+
+  } catch (error: any) {
+    console.error("Proposal API Error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Proposal generation failed" },
+      { status: 500 }
+    );
+  }
+}
