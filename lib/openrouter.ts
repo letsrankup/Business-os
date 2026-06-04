@@ -42,9 +42,9 @@ async function chat(
 
 function cleanJSON(text: string): any {
   try {
-    let cleaned = text.split('```json').join('').split('
-```').join('').trim();
-    const start = cleaned.search(/[\[{]/);
+    let cleaned = text.replace('```json', '').replace('
+```', '').trim();
+    const start = cleaned.indexOf('{') !== -1 ? cleaned.indexOf('{') : cleaned.indexOf('[');
     if (start === -1) throw new Error('No JSON found');
     return JSON.parse(cleaned.slice(start));
   } catch {
@@ -188,7 +188,7 @@ export async function discoverLeads(params: LeadsParams) {
     { name: 'Sophia Martinez', company: 'OmniChannel Group', role: 'Chief Marketing Officer', email: 'smartinez@omnichannel.io', website: 'https://omnichannel.io', industry, score: 86, description: 'Upgrading marketing tech stack to ingest clean, enriched real-time prospect telemetry.' },
     { name: 'Vikram Malhotra', company: 'Hyperion Labs', role: 'Principal Architect', email: 'v.malhotra@hyperionlabs.com', website: 'https://hyperionlabs.com', industry, score: 94, description: 'Designing secure, zero-latency enterprise network portals for global business layers.' },
     { name: 'Chloe Dupont', company: 'Nova Ventures', role: 'Investment Partner', email: 'c.dupont@novaventures.cap', website: 'https://novaventures.cap', industry, score: 73, description: 'Tracking hyper-growth enterprise automation services for structural portfolio investments.' },
-    { name: "Aaron Sterling", company: "Foundry Digital", role: "Product Director", email: "asterling@foundrydigital.com", website: "https://foundrydigital.com", industry, score: 82, description: "Refining core web application usability frameworks for global corporate audiences." },
+    { name: 'Aaron Sterling', company: 'Foundry Digital', role: 'Product Director', email: 'asterling@foundrydigital.com', website: 'https://foundrydigital.com', industry, score: 82, description: 'Refining core web application usability frameworks for global corporate audiences.' },
     { name: 'Hassan Al-Rind', company: 'Falcon Tech Services', role: 'Growth Architect', email: 'hassan@falcontech.services', website: 'https://falcontech.services', industry, score: 97, description: 'Deploying production-grade automated outbound networks to target enterprise SaaS contracts.' },
     { name: 'Rachel Adams', company: 'Apex Systems', role: 'Managing Director', email: 'rachel.adams@apexsystems.io', website: 'https://apexsystems.io', industry, score: 85, description: 'Acquiring premium integration tools to scale customer data synchronizations seamlessly.' }
   ];
