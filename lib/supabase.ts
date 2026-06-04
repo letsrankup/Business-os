@@ -73,4 +73,4 @@ export async function resetPassword(email: string) {
     redirectTo: `${origin}/reset-password`,
   });
   if (error) throw new Error(error.message);
-  }
+    }
