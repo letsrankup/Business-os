@@ -1,54 +1,39 @@
 // lib/openrouter.ts
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-
-// ✅ Ye models actually free hain OpenRouter pe
-const FREE_MODELS = [
-  "mistralai/mistral-7b-instruct:free",
-  "meta-llama/llama-3.2-3b-instruct:free",
-  "google/gemma-2-9b-it:free",
-];
+const MODEL = "openrouter/auto";
 
 // ─── Core Chat Function ───────────────────────────────────────
 async function chat(
   messages: { role: string; content: string }[],
-  maxTokens = 700
+  maxTokens = 300
 ): Promise<string> {
-  // Har free model try karo — pehla jo kaam kare use karo
-  for (const model of FREE_MODELS) {
-    try {
-      const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "HTTP-Referer":
-            process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-          "X-Title": "AI Business OS",
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          max_tokens: maxTokens,
-          temperature: 0.7,
-        }),
-      });
+  const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "HTTP-Referer":
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      "X-Title": "AI Business OS",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.7,
+    }),
+  });
 
-      if (!res.ok) {
-        const err = await res.text();
-        console.warn(`Model ${model} failed:`, err);
-        continue; // agla model try karo
-      }
-
-      const data = await res.json();
-      const text = data?.choices?.[0]?.message?.content || "";
-      if (text.length > 5) return text;
-    } catch (err: any) {
-      console.warn(`Model ${model} error:`, err.message);
-      continue; // agla model try karo
-    }
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenRouter error ${res.status}: ${err}`);
   }
-  throw new Error("All AI models failed. Check your OpenRouter API key.");
+
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content || "";
+  if (text.length > 5) return text;
+  throw new Error("Empty response from AI");
 }
 
 // ─── JSON Cleaner ─────────────────────────────────────────────
@@ -68,37 +53,31 @@ function cleanJSON(text: string): any {
 
 // ─── SEO Audit ────────────────────────────────────────────────
 export async function generateAuditReport(url: string) {
-  const text = await chat(
-    [
-      {
-        role: "user",
-        content: `You are an SEO expert. Analyze website: ${url}
+  try {
+    const text = await chat(
+      [
+        {
+          role: "user",
+          content: `SEO expert. Analyze: ${url}
+Reply ONLY valid JSON no markdown:
+{"score":75,"performance":80,"seo":72,"accessibility":88,"summary":"Brief summary.","issues":["issue1","issue2","issue3"],"recommendations":["rec1","rec2","rec3"],"keywords":["kw1","kw2","kw3","kw4"]}`,
+        },
+      ],
+      280
+    );
+    const parsed = cleanJSON(text);
+    if (parsed) return parsed;
+  } catch (e) {
+    console.error("SEO Audit AI failed, using fallback:", e);
+  }
 
-Reply with ONLY valid JSON, no explanation, no markdown:
-{
-  "score": 75,
-  "performance": 80,
-  "seo": 72,
-  "accessibility": 88,
-  "summary": "2-3 sentence summary.",
-  "issues": ["issue1","issue2","issue3","issue4","issue5"],
-  "recommendations": ["rec1","rec2","rec3","rec4"],
-  "keywords": ["kw1","kw2","kw3","kw4","kw5","kw6"]
-}`,
-      },
-    ],
-    500
-  );
-
-  const parsed = cleanJSON(text);
-  if (parsed) return parsed;
-
+  // Fallback
   return {
     score: 70,
     performance: 72,
     seo: 68,
     accessibility: 80,
-    summary: "Analysis complete. Review the details below.",
+    summary: `SEO analysis for ${url} complete. Several improvements recommended.`,
     issues: [
       "Meta description missing or too short",
       "Images missing alt attributes",
@@ -112,10 +91,7 @@ Reply with ONLY valid JSON, no explanation, no markdown:
       "Enable browser caching and compress assets",
       "Build strategic internal links between pages",
     ],
-    keywords: [
-      "website", "online", "business",
-      "service", "professional", "quality",
-    ],
+    keywords: ["website", "online", "business", "service", "professional", "quality"],
   };
 }
 
@@ -130,35 +106,36 @@ interface ContentParams {
 }
 
 const typeGuide: Record<string, string> = {
-  blog: "Write a full SEO blog article with H2/H3 headers, intro, 3-5 body sections, and conclusion.",
-  linkedin: "Write a LinkedIn post with strong hook, value insight, short paragraphs, CTA, and 3-5 hashtags.",
-  email: "Write email with: Subject line, Preview text, Body (hook, value, CTA), Sign-off.",
-  ad: "Write 3 ads: [FACEBOOK] headline+body, [GOOGLE] 3 headlines+description, [INSTAGRAM] caption+hashtags.",
-  product: "Write product description (150 words): opening, 3 benefits, social proof, CTA.",
-  social: "Write 3 posts: [TWITTER] under 280 chars, [INSTAGRAM] with hashtags, [FACEBOOK] conversational.",
+  blog: "Write a short SEO blog article with H2 headers, intro, 2-3 sections, conclusion.",
+  linkedin: "Write a LinkedIn post with hook, insight, CTA, and 3 hashtags.",
+  email: "Write email: Subject, Body (hook+value+CTA), Sign-off.",
+  ad: "[FACEBOOK] headline+body. [GOOGLE] 2 headlines. [INSTAGRAM] caption.",
+  product: "Write product description (80 words): opening, 2 benefits, CTA.",
+  social: "[TWITTER] under 280 chars. [INSTAGRAM] with hashtags. [FACEBOOK] short.",
 };
 
 export async function generateContent(params: ContentParams): Promise<string> {
-  const { contentType, topic, tone, keywords, targetAudience, wordCount = 500 } = params;
+  const { contentType, topic, tone, keywords, targetAudience } = params;
 
-  return chat(
-    [
-      {
-        role: "user",
-        content: `You are a world-class ${tone} copywriter.
-
-Task: ${typeGuide[contentType] || `Write ${contentType} content (~${wordCount} words).`}
-
+  try {
+    return await chat(
+      [
+        {
+          role: "user",
+          content: `You are a ${tone} copywriter.
+Task: ${typeGuide[contentType] || `Write ${contentType} content.`}
 Topic: ${topic}
 Tone: ${tone}
-Audience: ${targetAudience || "General audience"}
+Audience: ${targetAudience || "General"}
 Keywords: ${keywords.join(", ") || "none"}
-
-Write the content now:`,
-      },
-    ],
-    700
-  );
+Write now:`,
+        },
+      ],
+      280
+    );
+  } catch (e) {
+    return `# ${topic}\n\nAI content generation temporarily unavailable. Please try again in a moment.`;
+  }
 }
 
 // ─── Full Proposal Generator ──────────────────────────────────
@@ -180,33 +157,24 @@ export async function generateProposal(params: ProposalParams): Promise<string> 
     yourName, yourCompany,
   } = params;
 
-  return chat(
-    [
-      {
-        role: "user",
-        content: `Write a professional project proposal for:
-
+  try {
+    return await chat(
+      [
+        {
+          role: "user",
+          content: `Write a professional proposal:
 Client: ${clientName}${clientBusiness ? ` (${clientBusiness})` : ""}
-Project: ${projectType}
-Description: ${projectDescription}
-Budget: ${budget || "To be discussed"}
-Timeline: ${timeline || "To be agreed"}
+Project: ${projectType} - ${projectDescription}
+Budget: ${budget || "TBD"}, Timeline: ${timeline || "TBD"}
 From: ${yourName || "Our Team"}, ${yourCompany || "Our Company"}
-
-Include these sections:
-1. EXECUTIVE SUMMARY
-2. PROJECT UNDERSTANDING
-3. SCOPE OF WORK
-4. TIMELINE & MILESTONES
-5. INVESTMENT
-6. WHY CHOOSE US
-7. NEXT STEPS
-
-Write it professionally and persuasively.`,
-      },
-    ],
-    700
-  );
+Sections: Executive Summary, Scope, Timeline, Investment, Next Steps.`,
+        },
+      ],
+      280
+    );
+  } catch (e) {
+    return `PROPOSAL FOR ${clientName.toUpperCase()}\n\nDear ${clientName},\n\nThank you for considering our services for your ${projectType} project.\n\nWe propose to deliver ${projectDescription} within ${timeline || "an agreed timeline"} for a budget of ${budget || "to be discussed"}.\n\nPlease contact ${yourName || "us"} at ${yourCompany || "our company"} to discuss further.\n\nBest regards,\n${yourName || "Our Team"}`;
+  }
 }
 
 // ─── Lead Card Propose Button ─────────────────────────────────
@@ -223,27 +191,23 @@ interface LeadProposalParams {
 export async function generateLeadProposal(
   lead: LeadProposalParams
 ): Promise<string> {
-  return chat(
-    [
-      {
-        role: "user",
-        content: `Write a short professional outreach proposal (150-200 words):
-
-Name: ${lead.name}
-Company: ${lead.company}
+  try {
+    return await chat(
+      [
+        {
+          role: "user",
+          content: `Write a short outreach proposal (100 words max):
+Name: ${lead.name}, Company: ${lead.company}
 Title: ${lead.title || "Decision Maker"}
 Industry: ${lead.industry || "Technology"}
-${lead.description ? `Context: ${lead.description}` : ""}
-
-Structure:
-1. Personalized opening
-2. Problem we solve
-3. Value proposition
-4. Call to action`,
-      },
-    ],
-    400
-  );
+Include: opening, value proposition, call to action.`,
+        },
+      ],
+      250
+    );
+  } catch (e) {
+    return `Dear ${lead.name},\n\nI hope this message finds you well. I noticed ${lead.company}'s impressive work in the ${lead.industry || "industry"} space.\n\nI'd love to explore how we can help ${lead.company} achieve its goals. Our solutions have helped similar companies increase efficiency and revenue.\n\nWould you be open to a quick 15-minute call this week?\n\nBest regards`;
+  }
 }
 
 // ─── Lead Discovery ───────────────────────────────────────────
@@ -256,39 +220,27 @@ interface LeadsParams {
 export async function discoverLeads(params: LeadsParams) {
   const { query, industry, count } = params;
 
-  const text = await chat(
-    [
-      {
-        role: "user",
-        content: `You are a B2B sales expert. Generate ${count} business leads.
+  try {
+    const text = await chat(
+      [
+        {
+          role: "user",
+          content: `Generate ${count} B2B leads. Target: ${query}, Industry: ${industry}.
+Reply ONLY valid JSON array:
+[{"name":"Name","company":"Co","role":"Title","email":"e@co.com","website":"https://co.com","industry":"${industry}","score":85,"description":"Why good lead"}]`,
+        },
+      ],
+      280
+    );
 
-Target: ${query}
-Industry: ${industry}
-
-Reply with ONLY a valid JSON array, no explanation, no markdown:
-[
-  {
-    "name": "Full Name",
-    "company": "Company Name",
-    "role": "Job Title",
-    "email": "email@company.com",
-    "website": "https://company.com",
-    "industry": "${industry}",
-    "score": 85,
-    "description": "Why this is a good lead"
+    const parsed = cleanJSON(text);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed?.leads) return parsed.leads;
+  } catch (e) {
+    console.error("Leads AI failed, using fallback:", e);
   }
-]
 
-Make realistic fictional data. score: 85-98=hot, 70-84=warm, 60-69=cold.`,
-      },
-    ],
-    600
-  );
-
-  const parsed = cleanJSON(text);
-  if (Array.isArray(parsed)) return parsed;
-  if (parsed?.leads) return parsed.leads;
-
+  // Fallback leads
   return [
     {
       name: "Sarah Johnson",
@@ -298,7 +250,7 @@ Make realistic fictional data. score: 85-98=hot, 70-84=warm, 60-69=cold.`,
       website: "https://techflow.com",
       industry,
       score: 92,
-      description: "Fast-growing company actively seeking marketing solutions.",
+      description: "Fast-growing company actively seeking solutions.",
     },
     {
       name: "Ahmed Raza",
@@ -318,7 +270,37 @@ Make realistic fictional data. score: 85-98=hot, 70-84=warm, 60-69=cold.`,
       website: "https://startuphub.io",
       industry,
       score: 85,
-      description: "Early-stage startup with budget for growth services.",
+      description: "Early-stage startup with budget for growth.",
+    },
+    {
+      name: "Omar Hassan",
+      company: "CloudSoft Solutions",
+      role: "CTO",
+      email: "omar@cloudsoft.io",
+      website: "https://cloudsoft.io",
+      industry,
+      score: 88,
+      description: "Tech company scaling rapidly, needs new tools.",
+    },
+    {
+      name: "Fatima Ali",
+      company: "GrowthMetrics",
+      role: "Head of Sales",
+      email: "fatima@growthmetrics.com",
+      website: "https://growthmetrics.com",
+      industry,
+      score: 74,
+      description: "Sales-focused firm looking to improve pipeline.",
+    },
+    {
+      name: "David Chen",
+      company: "InnovateCo",
+      role: "VP Operations",
+      email: "david@innovateco.com",
+      website: "https://innovateco.com",
+      industry,
+      score: 81,
+      description: "Operations-heavy company seeking efficiency tools.",
     },
   ];
-        }
+    }
