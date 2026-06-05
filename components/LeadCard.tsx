@@ -160,4 +160,4 @@ export default function LeadCard({ lead, onPropose, onAddToCRM, isGenerating }: 
       </div>
     </div>
   );
-          }
+      }
