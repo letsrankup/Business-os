@@ -470,4 +470,4 @@ export async function discoverLeads(params: {
   }
 
   throw new Error("Lead discovery failed. Please try again in a moment.");
-}
+  }
