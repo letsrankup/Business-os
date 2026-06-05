@@ -1,28 +1,30 @@
 // ============================================================
-//  lib/openrouter.ts  —  SERVER-SIDE ONLY
-//  FIXED: Anthropic API + Email + Phone Number in leads
+//  lib/openrouter.ts  —  SERVER-SIDE ONLY (OPENROUTER FREE VERSION)
 // ============================================================
 
-const ANTHROPIC_BASE = "https://api.anthropic.com/v1/messages";
-const MODEL = "claude-opus-4-5";
+// 🔴 OPENROUTER BASE URL AUR FREE MODEL SET KAR DIYA
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = "meta-llama/llama-3-8b-instruct:free";
 
 // ─── Core Chat ───────────────────────────────────────────────
 async function chat(
   messages: { role: string; content: string }[],
-  maxTokens = 4000,
+  maxTokens = 1500, // Token size default 1500 kar di taake fast load ho
   retries = 3
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not found.");
+  // Sahi environment variable name check
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY not found. Please check Vercel Env.");
 
   for (let i = 0; i < retries; i++) {
     try {
-      const res = await fetch(ANTHROPIC_BASE, {
+      const res = await fetch(OPENROUTER_BASE, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://netlify.app", // Fallback metadata
+          "X-Title": "Business OS"
         },
         body: JSON.stringify({
           model: MODEL,
@@ -37,15 +39,11 @@ async function chat(
 
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(`Anthropic error ${res.status}: ${errText}`);
+        throw new Error(`OpenRouter error ${res.status}: ${errText}`);
       }
 
       const data = await res.json();
-      const text =
-        data?.content
-          ?.filter((b: { type: string }) => b.type === "text")
-          .map((b: { text: string }) => b.text)
-          .join("") || "";
+      const text = data?.choices?.[0]?.message?.content || "";
 
       if (text.length > 5) return text;
       throw new Error("Empty response");
@@ -64,7 +62,7 @@ function cleanJSON(text: string): unknown {
     const startBrace   = cleaned.indexOf("{");
     const startBracket = cleaned.indexOf("[");
     let start = -1;
-    if      (startBrace === -1 && startBracket === -1) throw new Error("No JSON");
+    if (startBrace === -1 && startBracket === -1) throw new Error("No JSON");
     else if (startBrace === -1)   start = startBracket;
     else if (startBracket === -1) start = startBrace;
     else start = Math.min(startBrace, startBracket);
@@ -86,7 +84,7 @@ export async function generateAuditReport(url: string) {
   const text = await chat([{
     role: "user",
     content: `You are an expert SEO analyst. Analyze: ${url}
-Return ONLY valid JSON, no markdown:
+Return ONLY valid JSON, no markdown, no text explanation outside JSON:
 {"score":75,"performance":80,"seo":72,"accessibility":88,"bestPractices":85,"mobile":78,"loadTime":"2.1s","pageSize":"1.8 MB","wordCount":1240,"summary":"2-3 sentence summary.","issues":[{"severity":"HIGH","message":"issue1"},{"severity":"MEDIUM","message":"issue2"},{"severity":"LOW","message":"issue3"}],"recommendations":[{"text":"rec1","impact":"HIGH","expectedImpact":"impact1"},{"text":"rec2","impact":"MEDIUM","expectedImpact":"impact2"}],"keywords":["kw1","kw2","kw3","kw4","kw5"],"metaTags":{"title":"title here","description":"desc here","hasOG":true,"hasTwitterCard":false},"backlinks":{"estimated":"~1,200","domainAuthority":45}}`,
   }], 2000);
   const parsed = cleanJSON(text);
@@ -118,7 +116,7 @@ Tone: ${tone}
 Audience: ${targetAudience || "General audience"}
 Keywords: ${keywords.join(", ") || "none"}
 Write the content now:`,
-  }], 4000);
+  }], 2500);
 }
 
 // ─── Proposal Generator ──────────────────────────────────────
@@ -139,7 +137,7 @@ Budget: ${budget || "TBD"}
 Timeline: ${timeline || "TBD"}
 From: ${yourName || "Our Team"}${yourCompany ? `, ${yourCompany}` : ""}
 Include: Executive Summary, Scope of Work, Timeline, Investment, Next Steps.`,
-  }], 4000);
+  }], 2500);
 }
 
 // ─── Lead Outreach Email ──────────────────────────────────────
@@ -155,50 +153,25 @@ Name: ${lead.name} | Title: ${lead.title || "Decision Maker"}
 Company: ${lead.company} | Industry: ${lead.industry || "Business"}
 Context: ${lead.description || "B2B services"}
 Format: Subject line, 3-4 short paras (opener, pain point, solution, CTA), max 150 words body. Sound human.`,
-  }], 1500);
+  }], 1000);
 }
 
 // ─── Phone number generator by country ───────────────────────
 function generatePhone(location: string): string {
   const loc = location.toLowerCase();
-
   if (loc.includes("new york") || loc.includes("usa") || loc.includes("toronto") || loc.includes("canada")) {
-    const area = ["212","646","917","347","718","416","647","437"][Math.floor(Math.random()*8)];
-    return `+1 (${area}) ${Math.floor(Math.random()*900+100)}-${Math.floor(Math.random()*9000+1000)}`;
+    return `+1 (212) ${Math.floor(Math.random()*900+100)}-${Math.floor(Math.random()*9000+1000)}`;
   }
-  if (loc.includes("london") || loc.includes("uk") || loc.includes("manchester")) {
+  if (loc.includes("london") || loc.includes("uk")) {
     return `+44 20 ${Math.floor(Math.random()*9000+1000)} ${Math.floor(Math.random()*9000+1000)}`;
   }
-  if (loc.includes("dubai") || loc.includes("abu dhabi") || loc.includes("uae")) {
-    return `+971 ${Math.floor(Math.random()*9+1)*10+Math.floor(Math.random()*9)} ${Math.floor(Math.random()*900+100)} ${Math.floor(Math.random()*9000+1000)}`;
+  if (loc.includes("dubai") || loc.includes("uae")) {
+    return `+971 50 ${Math.floor(Math.random()*900+100)} ${Math.floor(Math.random()*9000+1000)}`;
   }
-  if (loc.includes("singapore")) {
-    return `+65 ${Math.floor(Math.random()*9000+6000)} ${Math.floor(Math.random()*9000+1000)}`;
+  if (loc.includes("karachi") || loc.includes("lahore") || loc.includes("pakistan")) {
+    return `+92 300 ${Math.floor(Math.random()*9000000+1000000)}`;
   }
-  if (loc.includes("berlin") || loc.includes("germany") || loc.includes("munich")) {
-    return `+49 30 ${Math.floor(Math.random()*90000000+10000000)}`;
-  }
-  if (loc.includes("sydney") || loc.includes("melbourne") || loc.includes("australia")) {
-    return `+61 2 ${Math.floor(Math.random()*90000000+10000000)}`;
-  }
-  if (loc.includes("mumbai") || loc.includes("delhi") || loc.includes("india") || loc.includes("bangalore")) {
-    return `+91 ${Math.floor(Math.random()*9000+6000)} ${Math.floor(Math.random()*900+100)} ${Math.floor(Math.random()*9000+1000)}`;
-  }
-  if (loc.includes("karachi") || loc.includes("lahore") || loc.includes("islamabad") || loc.includes("pakistan")) {
-    return `+92 ${Math.floor(Math.random()*9+1)*100+Math.floor(Math.random()*99)} ${Math.floor(Math.random()*9000000+1000000)}`;
-  }
-  if (loc.includes("amsterdam") || loc.includes("netherlands")) {
-    return `+31 20 ${Math.floor(Math.random()*9000000+1000000)}`;
-  }
-  if (loc.includes("paris") || loc.includes("france")) {
-    return `+33 1 ${Math.floor(Math.random()*90000000+10000000)}`;
-  }
-  if (loc.includes("riyadh") || loc.includes("jeddah") || loc.includes("saudi")) {
-    return `+966 5${Math.floor(Math.random()*9)} ${Math.floor(Math.random()*900+100)} ${Math.floor(Math.random()*9000+1000)}`;
-  }
-  // Default international
-  const codes = ["+1", "+44", "+49", "+33", "+61", "+65"];
-  return `${codes[Math.floor(Math.random()*codes.length)]} ${Math.floor(Math.random()*900+100)} ${Math.floor(Math.random()*900+100)} ${Math.floor(Math.random()*9000+1000)}`;
+  return `+1 (800) ${Math.floor(Math.random()*900+100)}-${Math.floor(Math.random()*9000+1000)}`;
 }
 
 // ─── Discover Leads — batch ───────────────────────────────────
@@ -207,27 +180,15 @@ async function fetchLeadBatch(
   industry: string,
   batchIndex: number
 ): Promise<unknown[]> {
-  const regions = ["North America & Europe", "Middle East, Asia & Australia"];
+  const regions = ["North America", "Europe & Asia"];
 
   const text = await chat([{
     role: "user",
     content: `You are a world-class B2B lead researcher.
-Generate EXACTLY 25 unique realistic B2B leads for:
+Generate EXACTLY 10 unique realistic B2B leads for:
 Target: "${query}" | Industry: "${industry}" | Region: ${regions[batchIndex] || "Global"}
 
-RULES:
-- Realistic diverse full names (Western, Arab, South Asian, East Asian)
-- Email: firstname.lastname@companydomain.com
-- Website: https://companydomain.com (must match email domain)
-- Titles: CEO, CTO, VP Sales, Director, Head of, COO, CMO (mix)
-- Company sizes: 11-50, 51-200, 201-500 (mix)
-- Real cities: New York, London, Dubai, Singapore, Berlin, Toronto, Sydney, Mumbai, Amsterdam, Karachi
-- Score 62-99 based on fit
-- Tags: 2-3 specific relevant tags
-- Description: ONE sentence of their specific current business challenge
-- linkedinUrl: realistic LinkedIn URL format
-
-Return ONLY raw JSON array, no markdown, no explanation:
+Return ONLY raw JSON array, no markdown wrap, no conversation outside JSON:
 [{
   "name":"Full Name",
   "company":"Company Name",
@@ -240,24 +201,21 @@ Return ONLY raw JSON array, no markdown, no explanation:
   "companySize":"51-200",
   "score":87,
   "tags":["tag1","tag2"],
-  "description":"Their specific current business challenge."
+  "description":"One sentence current business challenge."
 }]`,
-  }], 4000);
+  }], 3000);
 
   const parsed = cleanJSON(text);
-
   let leads: unknown[] = [];
-  if (Array.isArray(parsed) && parsed.length > 0) {
+  if (Array.isArray(parsed)) {
     leads = parsed;
   } else if (parsed && typeof parsed === "object") {
     const obj = parsed as Record<string, unknown>;
     if (Array.isArray(obj.leads)) leads = obj.leads;
-    else if (Array.isArray(obj.data)) leads = obj.data;
   }
 
-  if (leads.length === 0) throw new Error(`Batch ${batchIndex + 1} parse failed`);
+  if (leads.length === 0) return []; // Fallback empty array instead of throwing hard error
 
-  // Add phone number based on location
   return leads.map((lead) => {
     const l = lead as Record<string, string>;
     return {
@@ -271,12 +229,12 @@ Return ONLY raw JSON array, no markdown, no explanation:
 export async function discoverLeads(params: {
   query: string;
   industry: string;
-  count?: number;
 }): Promise<unknown[]> {
   const { query, industry } = params;
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY not configured in Vercel Environment Variables.");
+  // Anthropic key hataye baghair backup check OpenRouter par lagaya
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is missing in Vercel settings.");
   }
 
   const results = await Promise.allSettled([
@@ -298,16 +256,8 @@ export async function discoverLeads(params: {
           allLeads.push({ ...l, industry });
         }
       }
-    } else {
-      console.error(`Batch ${i + 1} failed:`, r.reason);
     }
   }
 
-  if (allLeads.length > 0) {
-    return (allLeads as Record<string, number>[]).sort(
-      (a, b) => (b.score ?? 0) - (a.score ?? 0)
-    );
-  }
-
-  throw new Error("Lead discovery failed. Please try again.");
-          }
+  return allLeads.sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0));
+}
