@@ -1,11 +1,11 @@
 // ============================================================
-//  lib/openrouter.ts  —  SERVER-SIDE ONLY (STABLE BACKEND FOR ALL)
+//  lib/openrouter.ts  —  WORKING CONFIG FOR ALL TOOLS
 // ============================================================
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
 
-// 🔴 SEO AUDIT WALA STABLE MODEL IDENTIFIER SET KAR DIYA
-const MODEL = "google/gemma-2-9b-it:free"; 
+// 🔴 SEO Audit wala original auto-router model jo bilkul sahi data nikal raha tha
+const MODEL = "openrouter/auto"; 
 
 // ─── Core Chat ───────────────────────────────────────────────
 async function chat(
@@ -13,9 +13,9 @@ async function chat(
   maxTokens = 2000,
   retries = 3
 ): Promise<string> {
-  // Aapke Vercel variables ke mutabiq dono key names ka check (OPENROUT aur OPENROUTER)
+  // Dono env names ka support taake authentication pass ho jaye
   const apiKey = process.env.OPENROUT_API_KEY || process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OpenRouter API key not found in Vercel Env Variables.");
+  if (!apiKey) throw new Error("OpenRouter API key missing in Vercel environment variables.");
 
   for (let i = 0; i < retries; i++) {
     try {
@@ -253,5 +253,4 @@ export async function discoverLeads(params: {
   }
 
   return allLeads.sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0));
-}
-  
+  }
