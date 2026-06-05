@@ -1,12 +1,15 @@
 // lib/openrouter.ts
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const MODEL = "openrouter/auto";
+
+// ✅ 100% FREE model — credits nahi lagte
+const MODEL = "google/gemma-3-4b-it:free";
 
 // ─── Core Chat Function ───────────────────────────────────────
 async function chat(
   messages: { role: string; content: string }[],
-  retries = 3
+  maxTokens = 800,  // ✅ 2000 se kam kiya — free tier ke liye
+  retries = 2
 ): Promise<string> {
   for (let i = 0; i < retries; i++) {
     try {
@@ -22,7 +25,7 @@ async function chat(
         body: JSON.stringify({
           model: MODEL,
           messages,
-          max_tokens: 2000,
+          max_tokens: maxTokens,
           temperature: 0.7,
         }),
       });
@@ -38,7 +41,7 @@ async function chat(
       throw new Error("Empty response from AI");
     } catch (err: any) {
       if (i === retries - 1) throw err;
-      await new Promise((r) => setTimeout(r, (i + 1) * 1500));
+      await new Promise((r) => setTimeout(r, 1500));
     }
   }
   throw new Error("All retries failed");
@@ -61,24 +64,18 @@ function cleanJSON(text: string): any {
 
 // ─── SEO Audit ────────────────────────────────────────────────
 export async function generateAuditReport(url: string) {
-  const text = await chat([
-    {
-      role: "user",
-      content: `You are an SEO expert. Analyze website: ${url}
+  const text = await chat(
+    [
+      {
+        role: "user",
+        content: `SEO expert. Analyze: ${url}
 
-Reply with ONLY valid JSON, no explanation, no markdown:
-{
-  "score": 75,
-  "performance": 80,
-  "seo": 72,
-  "accessibility": 88,
-  "summary": "2-3 sentence summary.",
-  "issues": ["issue1","issue2","issue3","issue4","issue5"],
-  "recommendations": ["rec1","rec2","rec3","rec4"],
-  "keywords": ["kw1","kw2","kw3","kw4","kw5","kw6"]
-}`,
-    },
-  ]);
+Reply ONLY valid JSON no markdown:
+{"score":75,"performance":80,"seo":72,"accessibility":88,"summary":"Brief summary here.","issues":["issue1","issue2","issue3","issue4","issue5"],"recommendations":["rec1","rec2","rec3","rec4"],"keywords":["kw1","kw2","kw3","kw4","kw5","kw6"]}`,
+      },
+    ],
+    500  // ✅ JSON chota hota hai — 500 kaafi hai
+  );
 
   const parsed = cleanJSON(text);
   if (parsed) return parsed;
@@ -120,39 +117,35 @@ interface ContentParams {
 }
 
 const typeGuide: Record<string, string> = {
-  blog: "Write a full SEO blog article with H2/H3 headers, intro, 3-5 body sections, and conclusion.",
-  linkedin:
-    "Write a LinkedIn post with strong hook, value insight, short paragraphs, CTA, and 3-5 hashtags.",
-  email:
-    "Write email with: Subject line, Preview text, Body (hook, value, CTA), Sign-off.",
-  ad: "Write 3 ads: [FACEBOOK] headline+body, [GOOGLE] 3 headlines+description, [INSTAGRAM] caption+hashtags.",
-  product:
-    "Write product description (150 words): opening, 3 benefits, social proof, CTA.",
-  social:
-    "Write 3 posts: [TWITTER] under 280 chars, [INSTAGRAM] with hashtags, [FACEBOOK] conversational.",
+  blog: "Write a short SEO blog article with H2 headers, intro, 3 body sections, conclusion.",
+  linkedin: "Write a LinkedIn post with hook, insight, CTA, and 3 hashtags.",
+  email: "Write email: Subject, Preview, Body (hook+value+CTA), Sign-off.",
+  ad: "Write: [FACEBOOK] headline+body, [GOOGLE] 3 headlines, [INSTAGRAM] caption.",
+  product: "Write product description (100 words): opening, 3 benefits, CTA.",
+  social: "Write: [TWITTER] under 280 chars, [INSTAGRAM] with hashtags, [FACEBOOK] short.",
 };
 
 export async function generateContent(params: ContentParams): Promise<string> {
-  const {
-    contentType, topic, tone,
-    keywords, targetAudience, wordCount = 600,
-  } = params;
+  const { contentType, topic, tone, keywords, targetAudience } = params;
 
-  return chat([
-    {
-      role: "user",
-      content: `You are a world-class ${tone} copywriter.
+  return chat(
+    [
+      {
+        role: "user",
+        content: `You are a ${tone} copywriter.
 
-Task: ${typeGuide[contentType] || `Write ${contentType} content (~${wordCount} words).`}
+Task: ${typeGuide[contentType] || `Write ${contentType} content.`}
 
 Topic: ${topic}
 Tone: ${tone}
 Audience: ${targetAudience || "General audience"}
 Keywords: ${keywords.join(", ") || "none"}
 
-Write the content now:`,
-    },
-  ]);
+Write now:`,
+      },
+    ],
+    700  // ✅ Content ke liye 700
+  );
 }
 
 // ─── Full Proposal Generator ──────────────────────────────────
@@ -174,10 +167,11 @@ export async function generateProposal(params: ProposalParams): Promise<string> 
     yourName, yourCompany,
   } = params;
 
-  return chat([
-    {
-      role: "user",
-      content: `Write a professional project proposal for:
+  return chat(
+    [
+      {
+        role: "user",
+        content: `Write a professional project proposal:
 
 Client: ${clientName}${clientBusiness ? ` (${clientBusiness})` : ""}
 Project: ${projectType}
@@ -186,18 +180,18 @@ Budget: ${budget || "To be discussed"}
 Timeline: ${timeline || "To be agreed"}
 From: ${yourName || "Our Team"}, ${yourCompany || "Our Company"}
 
-Include these sections:
+Sections:
 1. EXECUTIVE SUMMARY
-2. PROJECT UNDERSTANDING
-3. SCOPE OF WORK
-4. TIMELINE & MILESTONES
-5. INVESTMENT
-6. WHY CHOOSE US
-7. NEXT STEPS
+2. SCOPE OF WORK
+3. TIMELINE
+4. INVESTMENT
+5. NEXT STEPS
 
-Write it professionally and persuasively.`,
-    },
-  ]);
+Keep it concise and professional.`,
+      },
+    ],
+    700  // ✅ Proposal ke liye 700
+  );
 }
 
 // ─── Lead Card Propose Button ─────────────────────────────────
@@ -214,10 +208,11 @@ interface LeadProposalParams {
 export async function generateLeadProposal(
   lead: LeadProposalParams
 ): Promise<string> {
-  return chat([
-    {
-      role: "user",
-      content: `Write a short professional outreach proposal (150-200 words) for this prospect:
+  return chat(
+    [
+      {
+        role: "user",
+        content: `Write a short outreach proposal (100-150 words):
 
 Name: ${lead.name}
 Company: ${lead.company}
@@ -225,15 +220,11 @@ Title: ${lead.title || "Decision Maker"}
 Industry: ${lead.industry || "Technology"}
 ${lead.description ? `Context: ${lead.description}` : ""}
 
-Structure:
-1. Personalized opening (mention their company/role)
-2. What problem we solve for them
-3. Brief value proposition
-4. Clear call to action
-
-Make it warm, professional, and specific to their situation.`,
-    },
-  ]);
+Include: personalized opening, problem we solve, value proposition, call to action.`,
+      },
+    ],
+    400  // ✅ Short proposal — 400 kaafi
+  );
 }
 
 // ─── Lead Discovery ───────────────────────────────────────────
@@ -246,31 +237,23 @@ interface LeadsParams {
 export async function discoverLeads(params: LeadsParams) {
   const { query, industry, count } = params;
 
-  const text = await chat([
-    {
-      role: "user",
-      content: `You are a B2B sales expert. Generate ${count} business leads.
+  const text = await chat(
+    [
+      {
+        role: "user",
+        content: `B2B sales expert. Generate ${count} leads.
 
 Target: ${query}
 Industry: ${industry}
 
-Reply with ONLY a valid JSON array, no explanation, no markdown:
-[
-  {
-    "name": "Full Name",
-    "company": "Company Name",
-    "role": "Job Title",
-    "email": "email@company.com",
-    "website": "https://company.com",
-    "industry": "${industry}",
-    "score": 85,
-    "description": "Why this is a good lead"
-  }
-]
+Reply ONLY valid JSON array no markdown:
+[{"name":"Full Name","company":"Company","role":"Title","email":"email@co.com","website":"https://co.com","industry":"${industry}","score":85,"description":"Why good lead"}]
 
-Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
-    },
-  ]);
+Realistic data. score 85-98=hot, 70-84=warm, 60-69=cold.`,
+      },
+    ],
+    600  // ✅ JSON array ke liye 600
+  );
 
   const parsed = cleanJSON(text);
   if (Array.isArray(parsed)) return parsed;
@@ -285,7 +268,7 @@ Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
       website: "https://techflow.com",
       industry,
       score: 92,
-      description: "Fast-growing company actively seeking marketing solutions.",
+      description: "Fast-growing company actively seeking solutions.",
     },
     {
       name: "Ahmed Raza",
@@ -305,7 +288,7 @@ Make realistic fictional data. Scores: 85-98=hot, 70-84=warm, 60-69=cold.`,
       website: "https://startuphub.io",
       industry,
       score: 85,
-      description: "Early-stage startup with budget for growth services.",
+      description: "Early-stage startup with budget for growth.",
     },
   ];
-}
+    }
