@@ -16,15 +16,16 @@ export async function POST(req: NextRequest) {
     const leads = await discoverLeads({
       query,
       industry: industry || "Technology",
-      count: count || 6,        // ✅ count add kiya — yahi error tha
+      count: count || 6,
     });
 
-    return NextResponse.json({ success: true, leads });
+    // ✅ Direct array return karo — wrapper nahi
+    return NextResponse.json(leads);
 
   } catch (err: any) {
     console.error("[/api/leads]", err?.message);
     return NextResponse.json(
-      { success: false, error: err.message || "Lead discovery failed" },
+      { error: err.message || "Lead discovery failed" },
       { status: 500 }
     );
   }
