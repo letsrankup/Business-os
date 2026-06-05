@@ -1,245 +1,242 @@
+// FILE: app/leads/page.tsx
+// Yeh pura code app/leads/page.tsx mein paste karo
+
 "use client";
+
 import { useState } from "react";
-import AppLayout from "@/components/AppLayout";
 import LeadCard from "@/components/LeadCard";
+
+const INDUSTRIES = [
+  "SaaS", "Technology", "E-commerce", "Healthcare", "Finance",
+  "Marketing", "Real Estate", "Education", "Logistics", "Legal",
+];
+
+interface Lead {
+  id: string;
+  name: string;
+  role?: string;
+  company?: string;
+  email?: string;
+  website?: string;
+  industry?: string;
+  description?: string;
+  score?: number;
+  tags?: string[];
+  phone?: string;
+  location?: string;
+  companySize?: string;
+  revenue?: string;
+  linkedIn?: string;
+  painPoints?: string[];
+  buyingSignals?: string[];
+}
 
 export default function LeadsPage() {
   const [query, setQuery] = useState("");
   const [industry, setIndustry] = useState("SaaS");
+  const [count, setCount] = useState(6);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
-  const [leads, setLeads] = useState<any[]>([]);
   const [error, setError] = useState("");
-  const [loadingLeadId, setLoadingLeadId] = useState<string | null>(null);
-  const [selectedProposal, setSelectedProposal] = useState<any>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
 
-  // ─── Discover Leads ──────────────────────────────────────────
-  const discover = async () => {
-    if (!query.trim()) return;
+  const discoverLeads = async () => {
+    if (!query.trim()) {
+      setError("Please enter a target description");
+      return;
+    }
     setLoading(true);
     setError("");
     setLeads([]);
+
     try {
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, industry }),
+        body: JSON.stringify({ query, industry, count }),
       });
+
       const data = await res.json();
 
-      // API seedha array return karta hai
-      if (Array.isArray(data)) {
-        if (data.length === 0) {
-          setError("No leads found. Try a different query.");
-        } else {
-          setLeads(data);
-        }
-      } else if (data.error) {
-        setError(data.error);
-      } else {
-        setError("Unexpected response from server.");
+      if (!res.ok) {
+        throw new Error(data.error || `Server error: ${res.status}`);
       }
-    } catch {
-      setError("Network error. Please try again.");
+
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid response format from server");
+      }
+
+      setLeads(data);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // ─── AI Proposal Handler ─────────────────────────────────────
-  const handlePropose = async (lead: any, index: number) => {
-    const leadId = lead.id || String(index);
-    setLoadingLeadId(leadId);
+  const handlePropose = async (lead: Lead) => {
+    setGeneratingId(lead.id);
+    // Navigate to proposals with pre-filled data
+    const params = new URLSearchParams({
+      clientName: lead.name,
+      clientEmail: lead.email || "",
+      clientCompany: lead.company || "",
+      industry: lead.industry || industry,
+    });
+    window.location.href = `/proposal?${params.toString()}`;
+  };
+
+  const handleAddToCRM = async (lead: Lead) => {
     try {
-      const response = await fetch("/api/proposals/generate", {
+      const res = await fetch("/api/crm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          leadName: lead.name || "Prospect",
-          leadEmail: lead.email || "",
-          companyName: lead.company || "",
-          description: lead.description || "",
-          industry,
+          name: lead.name,
+          email: lead.email,
+          company: lead.company,
+          phone: lead.phone,
+          website: lead.website,
+          industry: lead.industry,
+          notes: lead.description,
+          score: lead.score,
         }),
       });
-      const result = await response.json();
-      if (result.success) {
-        setSelectedProposal(result.proposal);
-        setIsModalOpen(true);
-      } else {
-        alert("AI Error: " + result.error);
+      if (res.ok) {
+        alert(`✅ ${lead.name} added to CRM!`);
       }
     } catch {
-      alert("Failed to generate proposal.");
-    } finally {
-      setLoadingLeadId(null);
+      alert("Could not add to CRM");
     }
   };
 
   return (
-    <AppLayout title="Lead Discovery">
-      <div className="space-y-6">
-
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-black">
-            Lead <span className="text-[#00d9f5]">Discovery</span>
-          </h1>
-          <p className="text-gray-400 text-xs mt-1">
-            AI finds your ideal prospects automatically
-          </p>
-        </div>
-
-        {/* Search Box */}
-        <div className="bg-[#12121a] border border-white/10 rounded-2xl p-5 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs text-gray-500 mb-1.5">
-                Target Description
-              </label>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && discover()}
-                placeholder="e.g. B2B SaaS founders in US with 10-50 employees"
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#00d9f5]/50 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1.5">
-                Industry
-              </label>
-              <select
-                value={industry}
-                onChange={(e) => setIndustry(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none transition-all"
-              >
-                {[
-                  "SaaS","E-commerce","Healthcare","Finance",
-                  "Education","Real Estate","Marketing",
-                  "FinTech","LegalTech","HR / Recruitment",
-                  "Cybersecurity","Logistics",
-                ].map((i) => (
-                  <option key={i}>{i}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <button
-            onClick={discover}
-            disabled={loading || !query.trim()}
-            className="w-full py-3 rounded-xl bg-[#00d9f5] text-black font-bold hover:bg-[#00d9f5]/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {loading ? "🔍 Discovering 50+ leads..." : "🎯 Discover Leads with AI"}
-          </button>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 text-red-400 text-sm">
-            ⚠️ {error}
-          </div>
-        )}
-
-        {/* Loading */}
-        {loading && (
-          <div className="bg-[#12121a] border border-white/10 rounded-2xl p-10 text-center">
-            <div className="text-4xl mb-3 animate-pulse">🎯</div>
-            <p className="text-[#00d9f5] font-bold">
-              Scanning global database...
-            </p>
-            <p className="text-gray-500 text-xs mt-1">
-              Generating 50+ leads in parallel — takes ~30 seconds
-            </p>
-          </div>
-        )}
-
-        {/* Results */}
-        {leads.length > 0 && (
-          <div>
-            <p className="text-sm text-gray-400 mb-4">
-              Found{" "}
-              <span className="text-[#00d9f5] font-bold">{leads.length}</span>{" "}
-              leads
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {leads.map((lead, i) => (
-                <LeadCard
-                  key={lead.email || i}
-                  lead={lead}
-                  onPropose={() => handlePropose(lead, i)}
-                  isGenerating={loadingLeadId === (lead.id || String(i))}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">
+          Lead <span className="text-[#00e5a0]">Discovery</span>
+        </h1>
+        <p className="text-gray-400 text-sm mt-1">AI finds your ideal prospects automatically</p>
       </div>
 
-      {/* Proposal Modal */}
-      {isModalOpen && selectedProposal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#0b0f19] border border-zinc-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl relative">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors"
+      {/* Search Form */}
+      <div className="bg-[#111827] border border-[#1f2937] rounded-xl p-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          {/* Target Description */}
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500 mb-1 block">Target Description *</label>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && discoverLeads()}
+              placeholder="e.g. SaaS founders who need SEO tools"
+              className="w-full bg-[#1f2937] border border-[#374151] rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-[#00e5a0] transition-colors"
+            />
+          </div>
+
+          {/* Industry */}
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Industry</label>
+            <select
+              value={industry}
+              onChange={(e) => setIndustry(e.target.value)}
+              className="w-full bg-[#1f2937] border border-[#374151] rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-[#00e5a0] transition-colors"
             >
-              ✕
+              {INDUSTRIES.map((ind) => (
+                <option key={ind} value={ind}>{ind}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Count selector */}
+        <div className="flex items-center gap-3 mb-3">
+          <label className="text-xs text-gray-500">Leads to generate:</label>
+          {[3, 6, 9, 12].map((n) => (
+            <button
+              key={n}
+              onClick={() => setCount(n)}
+              className={`text-xs px-3 py-1 rounded-full border transition-all ${
+                count === n
+                  ? "bg-[#00e5a020] border-[#00e5a060] text-[#00e5a0]"
+                  : "border-[#374151] text-gray-400 hover:border-[#374151]"
+              }`}
+            >
+              {n}
             </button>
+          ))}
+        </div>
 
-            <div className="mb-4">
-              <h3 className="text-xl font-semibold text-[#00d9f5]">
-                AI Generated Proposal
-              </h3>
-              <p className="text-xs text-zinc-400 mt-1">
-                To: {selectedProposal.lead_email || "No Email Found"}
-              </p>
-            </div>
+        {/* Button */}
+        <button
+          onClick={discoverLeads}
+          disabled={loading}
+          className="w-full py-3 rounded-xl font-bold text-sm transition-all"
+          style={{
+            background: loading ? "#1f2937" : "linear-gradient(135deg, #00e5a0, #0ea5e9)",
+            color: loading ? "#6b7280" : "#080c10",
+          }}
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="inline-block w-4 h-4 border-2 border-gray-600 border-t-gray-300 rounded-full animate-spin" />
+              Discovering leads with AI...
+            </span>
+          ) : (
+            "🎯 Discover Leads with AI"
+          )}
+        </button>
+      </div>
 
-            <div className="mb-4">
-              <label className="block text-xs text-gray-500 mb-1">Subject</label>
-              <input
-                type="text"
-                value={selectedProposal.subject}
-                onChange={(e) =>
-                  setSelectedProposal({ ...selectedProposal, subject: e.target.value })
-                }
-                className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-[#00d9f5]/50"
-              />
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-xs text-gray-500 mb-1">
-                Email Body
-              </label>
-              <textarea
-                rows={8}
-                value={selectedProposal.email_body}
-                onChange={(e) =>
-                  setSelectedProposal({ ...selectedProposal, email_body: e.target.value })
-                }
-                className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-[#00d9f5]/50 font-mono resize-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="bg-zinc-900 text-zinc-300 text-sm px-4 py-2 rounded-xl border border-white/10 hover:bg-zinc-800 transition-all"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => alert("Sending functionality coming next!")}
-                className="bg-[#00d9f5] text-black font-bold text-sm px-5 py-2 rounded-xl hover:bg-[#00d9f5]/80 transition-all"
-              >
-                Send Proposal
-              </button>
-            </div>
+      {/* Error */}
+      {error && (
+        <div className="bg-red-950 border border-red-800 rounded-xl p-4 mb-4 flex items-start gap-3">
+          <span className="text-lg">⚠️</span>
+          <div>
+            <p className="text-red-400 text-sm font-semibold">Error</p>
+            <p className="text-red-300 text-xs mt-1">{error}</p>
           </div>
         </div>
       )}
-    </AppLayout>
+
+      {/* Results */}
+      {leads.length > 0 && (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-gray-400 text-sm">
+              Found <span className="text-white font-bold">{leads.length}</span> leads
+              {query && <span className="text-gray-500"> for "{query}"</span>}
+            </p>
+            <button
+              onClick={discoverLeads}
+              className="text-xs text-[#00e5a0] border border-[#00e5a030] px-3 py-1 rounded-full hover:bg-[#00e5a010] transition-all"
+            >
+              🔄 Refresh
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {leads.map((lead) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onPropose={() => handlePropose(lead)}
+                onAddToCRM={() => handleAddToCRM(lead)}
+                isGenerating={generatingId === lead.id}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Empty state */}
+      {!loading && leads.length === 0 && !error && (
+        <div className="text-center py-16 text-gray-500">
+          <p className="text-4xl mb-4">🎯</p>
+          <p className="text-sm">Enter your target and click Discover to find real leads</p>
+        </div>
+      )}
+    </div>
   );
-        }
+}
