@@ -1,20 +1,21 @@
 // ============================================================
-//  lib/openrouter.ts  —  SERVER-SIDE ONLY (OPENROUTER FREE VERSION)
+//  lib/openrouter.ts  —  SERVER-SIDE ONLY (STABLE BACKEND FOR ALL)
 // ============================================================
 
-// 🔴 OPENROUTER BASE URL AUR FREE MODEL SET KAR DIYA
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "meta-llama/llama-3-8b-instruct:free";
+
+// 🔴 SEO AUDIT WALA STABLE MODEL IDENTIFIER SET KAR DIYA
+const MODEL = "google/gemma-2-9b-it:free"; 
 
 // ─── Core Chat ───────────────────────────────────────────────
 async function chat(
   messages: { role: string; content: string }[],
-  maxTokens = 1500, // Token size default 1500 kar di taake fast load ho
+  maxTokens = 2000,
   retries = 3
 ): Promise<string> {
-  // Sahi environment variable name check
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY not found. Please check Vercel Env.");
+  // Aapke Vercel variables ke mutabiq dono key names ka check (OPENROUT aur OPENROUTER)
+  const apiKey = process.env.OPENROUT_API_KEY || process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OpenRouter API key not found in Vercel Env Variables.");
 
   for (let i = 0; i < retries; i++) {
     try {
@@ -23,7 +24,7 @@ async function chat(
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://netlify.app", // Fallback metadata
+          "HTTP-Referer": "https://netlify.app",
           "X-Title": "Business OS"
         },
         body: JSON.stringify({
@@ -168,9 +169,6 @@ function generatePhone(location: string): string {
   if (loc.includes("dubai") || loc.includes("uae")) {
     return `+971 50 ${Math.floor(Math.random()*900+100)} ${Math.floor(Math.random()*9000+1000)}`;
   }
-  if (loc.includes("karachi") || loc.includes("lahore") || loc.includes("pakistan")) {
-    return `+92 300 ${Math.floor(Math.random()*9000000+1000000)}`;
-  }
   return `+1 (800) ${Math.floor(Math.random()*900+100)}-${Math.floor(Math.random()*9000+1000)}`;
 }
 
@@ -180,12 +178,12 @@ async function fetchLeadBatch(
   industry: string,
   batchIndex: number
 ): Promise<unknown[]> {
-  const regions = ["North America", "Europe & Asia"];
+  const regions = ["Global North", "Global South"];
 
   const text = await chat([{
     role: "user",
     content: `You are a world-class B2B lead researcher.
-Generate EXACTLY 10 unique realistic B2B leads for:
+Generate EXACTLY 8 unique realistic B2B leads for:
 Target: "${query}" | Industry: "${industry}" | Region: ${regions[batchIndex] || "Global"}
 
 Return ONLY raw JSON array, no markdown wrap, no conversation outside JSON:
@@ -203,7 +201,7 @@ Return ONLY raw JSON array, no markdown wrap, no conversation outside JSON:
   "tags":["tag1","tag2"],
   "description":"One sentence current business challenge."
 }]`,
-  }], 3000);
+  }], 2500);
 
   const parsed = cleanJSON(text);
   let leads: unknown[] = [];
@@ -214,7 +212,7 @@ Return ONLY raw JSON array, no markdown wrap, no conversation outside JSON:
     if (Array.isArray(obj.leads)) leads = obj.leads;
   }
 
-  if (leads.length === 0) return []; // Fallback empty array instead of throwing hard error
+  if (leads.length === 0) return []; 
 
   return leads.map((lead) => {
     const l = lead as Record<string, string>;
@@ -231,11 +229,6 @@ export async function discoverLeads(params: {
   industry: string;
 }): Promise<unknown[]> {
   const { query, industry } = params;
-
-  // Anthropic key hataye baghair backup check OpenRouter par lagaya
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is missing in Vercel settings.");
-  }
 
   const results = await Promise.allSettled([
     fetchLeadBatch(query, industry, 0),
@@ -261,3 +254,4 @@ export async function discoverLeads(params: {
 
   return allLeads.sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0));
 }
+  
