@@ -7,6 +7,7 @@ import { supabase, signOut } from "@/lib/supabase";
 const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: "⚡" },
   { label: "SEO Audit",  href: "/audit",     icon: "🔍" },
+  { href: "/chat", icon: "💬", label: "AI Chat" },
   { label: "Content AI", href: "/content",   icon: "✍️" },
   { label: "Proposals",  href: "/proposal",  icon: "📄" },
   { label: "Leads",      href: "/leads",     icon: "🎯" },
