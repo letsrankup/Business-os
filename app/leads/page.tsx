@@ -1,5 +1,5 @@
 // FILE: app/leads/page.tsx
-// Yeh pura code app/leads/page.tsx mein paste karo
+// Is pure code ko copy karke app/leads/page.tsx mein paste karein
 
 "use client";
 
@@ -206,7 +206,7 @@ export default function LeadsPage() {
           <div className="flex items-center justify-between mb-4">
             <p className="text-gray-400 text-sm">
               Found <span className="text-white font-bold">{leads.length}</span> leads
-              {query && <span className="text-gray-500"> for "{query}"</span>}
+              {query && <span className="text-gray-500"> for &quot;{query}&quot;</span>}
             </p>
             <button
               onClick={discoverLeads}
@@ -239,4 +239,4 @@ export default function LeadsPage() {
       )}
     </div>
   );
-}
+            }
