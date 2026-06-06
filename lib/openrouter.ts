@@ -1,39 +1,42 @@
 // lib/openrouter.ts
 
-const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const MODEL = "openrouter/auto";
-
-// ─── Core Chat Function ───────────────────────────────────────
+// ─── Core Chat Function (Gemini - FREE) ──────────────────────
 async function chat(
   messages: { role: string; content: string }[],
-  maxTokens = 300
+  maxTokens = 700
 ): Promise<string> {
-  const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "HTTP-Referer":
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-      "X-Title": "AI Business OS",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.7,
-    }),
-  });
+  const GEMINI_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY not set");
+
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: 0.7,
+        },
+      }),
+    }
+  );
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`OpenRouter error ${res.status}: ${err}`);
+    throw new Error(`Gemini error ${res.status}: ${err}`);
   }
 
   const data = await res.json();
-  const text = data?.choices?.[0]?.message?.content || "";
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
   if (text.length > 5) return text;
-  throw new Error("Empty response from AI");
+  throw new Error("Empty response from Gemini");
 }
 
 // ─── JSON Cleaner ─────────────────────────────────────────────
@@ -71,7 +74,6 @@ Reply ONLY valid JSON no markdown:
     console.error("SEO Audit AI failed, using fallback:", e);
   }
 
-  // Fallback
   return {
     score: 70,
     performance: 72,
@@ -240,7 +242,6 @@ Reply ONLY valid JSON array:
     console.error("Leads AI failed, using fallback:", e);
   }
 
-  // Fallback leads
   return [
     {
       name: "Sarah Johnson",
@@ -303,4 +304,4 @@ Reply ONLY valid JSON array:
       description: "Operations-heavy company seeking efficiency tools.",
     },
   ];
-    }
+}
