@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
-const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-
 export async function POST(req: NextRequest) {
   try {
     const { messages, fileContent, fileName } = await req.json();
@@ -15,57 +13,59 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ Sirf last 3 messages — tokens bachao (SEO audit jesa)
-    const recentMessages = messages.slice(-3);
+    const GEMINI_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_KEY) {
+      return NextResponse.json(
+        { error: "Gemini API key not configured" },
+        { status: 500 }
+      );
+    }
 
-    // ✅ File content last message mein add karo
-    const apiMessages = recentMessages.map((m: any, i: number) => {
-      if (
-        i === recentMessages.length - 1 &&
-        fileContent &&
-        fileName
-      ) {
-        return {
-          role: m.role,
-          content: `${m.content}\n\nAttached: ${fileName}\n${fileContent.slice(0, 500)}`,
-        };
-      }
-      return { role: m.role, content: m.content };
-    });
+    // OpenAI format → Gemini format convert karo
+    const recentMessages = messages.slice(-6);
 
-    const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "HTTP-Referer":
-          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-        "X-Title": "AI Business OS",
-      },
-      body: JSON.stringify({
-        model: "openrouter/auto",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an AI Business Assistant. Be helpful and concise.",
+    const contents = recentMessages.map((m: any) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+
+    // File content last message mein add karo
+    if (fileContent && fileName && contents.length > 0) {
+      const last = contents[contents.length - 1];
+      last.parts[0].text += `\n\nAttached File: ${fileName}\nContent:\n${fileContent.slice(0, 1000)}`;
+    }
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [
+              {
+                text: "You are an AI Business Assistant for Business OS. Help with business strategy, proposals, content writing, SEO analysis, and file analysis. Be professional, helpful, and concise.",
+              },
+            ],
           },
-          ...apiMessages,
-        ],
-        max_tokens: 280, // ✅ SEO Audit jitna — kaam karta hai
-        temperature: 0.7,
-      }),
-    });
+          contents,
+          generationConfig: {
+            maxOutputTokens: 800,
+            temperature: 0.7,
+          },
+        }),
+      }
+    );
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`OpenRouter error ${res.status}: ${err}`);
+      throw new Error(`Gemini error ${res.status}: ${err}`);
     }
 
     const data = await res.json();
     const reply =
-      data?.choices?.[0]?.message?.content ||
-      "Could not generate response. Try again.";
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Could not generate response. Please try again.";
 
     return NextResponse.json({ reply });
   } catch (e: any) {
@@ -75,4 +75,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-                  }
+  }
