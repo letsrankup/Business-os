@@ -1,20 +1,20 @@
 /**
  * ============================================================
- *  app/api/chat/route.ts
- *  Full-Stack Advanced AI Chat API — OpenRouter Edition
+ * app/api/chat/route.ts
+ * Full-Stack Advanced AI Chat API — OpenRouter Edition
  * ============================================================
- *  Features:
- *   ✅ OpenRouter multi-model routing
- *   ✅ Streaming (SSE) responses
- *   ✅ Text conversations (multi-turn)
- *   ✅ Image uploads (JPG, PNG, WEBP, GIF)
- *   ✅ PDF / document uploads (base64 vision)
- *   ✅ Voice / Audio transcription (Whisper via OpenRouter)
- *   ✅ System prompt injection
- *   ✅ Token usage tracking
- *   ✅ Rate-limit headers
- *   ✅ CORS preflight
- *   ✅ Full error handling & typed responses
+ * Features:
+ * ✅ OpenRouter multi-model routing
+ * ✅ Streaming (SSE) responses
+ * ✅ Text conversations (multi-turn)
+ * ✅ Image uploads (JPG, PNG, WEBP, GIF)
+ * ✅ PDF / document uploads (base64 vision)
+ * ✅ Voice / Audio transcription (Whisper via OpenRouter)
+ * ✅ System prompt injection
+ * ✅ Token usage tracking
+ * ✅ Rate-limit headers
+ * ✅ CORS preflight
+ * ✅ Full error handling & typed responses
  * ============================================================
  */
 
@@ -72,7 +72,10 @@ interface ApiError {
 function bufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary  = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  // FIXED ERROR HERE: Replaced for...of loop with standard for loop
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
   return btoa(binary);
 }
 
