@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// ✅ Same as SEO Audit — Vercel ko 60 sec time deta hai
 export const maxDuration = 60;
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
@@ -16,18 +15,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ File content ko last message mein add karo
-    const apiMessages = messages.map((m: any, i: number) => {
-      if (i === messages.length - 1 && fileContent && fileName) {
+    // ✅ Sirf last 3 messages — tokens bachao (SEO audit jesa)
+    const recentMessages = messages.slice(-3);
+
+    // ✅ File content last message mein add karo
+    const apiMessages = recentMessages.map((m: any, i: number) => {
+      if (
+        i === recentMessages.length - 1 &&
+        fileContent &&
+        fileName
+      ) {
         return {
           role: m.role,
-          content: `${m.content}\n\n📎 File: ${fileName}\n\nContent:\n${fileContent}`,
+          content: `${m.content}\n\nAttached: ${fileName}\n${fileContent.slice(0, 500)}`,
         };
       }
       return { role: m.role, content: m.content };
     });
 
-    // ✅ Same OpenRouter API key — audit jesa
     const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
       method: "POST",
       headers: {
@@ -43,11 +48,11 @@ export async function POST(req: NextRequest) {
           {
             role: "system",
             content:
-              "You are a powerful AI Business Assistant for Business OS. Help with: business strategy, proposals, content writing, SEO analysis, file analysis, and any business questions. Be professional, helpful, and concise.",
+              "You are an AI Business Assistant. Be helpful and concise.",
           },
           ...apiMessages,
         ],
-        max_tokens: 300,
+        max_tokens: 280, // ✅ SEO Audit jitna — kaam karta hai
         temperature: 0.7,
       }),
     });
@@ -60,7 +65,7 @@ export async function POST(req: NextRequest) {
     const data = await res.json();
     const reply =
       data?.choices?.[0]?.message?.content ||
-      "I could not generate a response. Please try again.";
+      "Could not generate response. Try again.";
 
     return NextResponse.json({ reply });
   } catch (e: any) {
@@ -70,4 +75,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-          }
+                  }
