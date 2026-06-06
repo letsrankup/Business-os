@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// ✅ Same as SEO Audit — Vercel ko 60 sec time deta hai
+export const maxDuration = 60;
+
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { messages, fileContent, fileName } = body;
+    const { messages, fileContent, fileName } = await req.json();
 
     if (!messages || messages.length === 0) {
       return NextResponse.json(
@@ -14,20 +16,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiMessages = messages.map((m: any) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // ✅ File content ko last message mein add karo
+    const apiMessages = messages.map((m: any, i: number) => {
+      if (i === messages.length - 1 && fileContent && fileName) {
+        return {
+          role: m.role,
+          content: `${m.content}\n\n📎 File: ${fileName}\n\nContent:\n${fileContent}`,
+        };
+      }
+      return { role: m.role, content: m.content };
+    });
 
-    // File attached hai to last message mein add karo
-    if (fileContent && fileName) {
-      const last = apiMessages[apiMessages.length - 1];
-      apiMessages[apiMessages.length - 1] = {
-        ...last,
-        content: `${last.content}\n\n📎 Attached File: ${fileName}\n\nFile Content:\n${fileContent}`,
-      };
-    }
-
+    // ✅ Same OpenRouter API key — audit jesa
     const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
       method: "POST",
       headers: {
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
           {
             role: "system",
             content:
-              "You are a powerful AI Business Assistant. Help with business analysis, proposals, content, SEO, strategy, and file analysis. Be professional, clear, and concise.",
+              "You are a powerful AI Business Assistant for Business OS. Help with: business strategy, proposals, content writing, SEO analysis, file analysis, and any business questions. Be professional, helpful, and concise.",
           },
           ...apiMessages,
         ],
@@ -54,19 +54,20 @@ export async function POST(req: NextRequest) {
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`OpenRouter error: ${err}`);
+      throw new Error(`OpenRouter error ${res.status}: ${err}`);
     }
 
     const data = await res.json();
     const reply =
-      data?.choices?.[0]?.message?.content || "No response generated.";
+      data?.choices?.[0]?.message?.content ||
+      "I could not generate a response. Please try again.";
 
     return NextResponse.json({ reply });
-  } catch (error: any) {
-    console.error("Chat API Error:", error);
+  } catch (e: any) {
+    console.error("Chat Error:", e);
     return NextResponse.json(
-      { error: error.message || "Chat failed" },
+      { error: e.message || "Chat failed" },
       { status: 500 }
     );
   }
-}
+          }
