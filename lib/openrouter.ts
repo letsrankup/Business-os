@@ -1,10 +1,11 @@
 // lib/openrouter.ts
-// ─── Production-Grade AI Library ─────────────────────────────
-// Fast · Reliable · Cached · Type-Safe
+// ═══════════════════════════════════════════════════════════════
+// PRODUCTION AI LIBRARY — Real Data · No Fake Fallbacks · Fast
+// ═══════════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
 // TYPES
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
 
 export interface Message {
   role: "user" | "assistant" | "system";
@@ -16,10 +17,30 @@ export interface AuditReport {
   performance: number;
   seo: number;
   accessibility: number;
+  bestPractices: number;
+  mobile: number;
+  loadTime: string;
+  pageSize: string;
+  wordCount: number;
+  domainAuthority: string;
   summary: string;
-  issues: string[];
-  recommendations: string[];
+  issues: Array<{ severity: "HIGH" | "MEDIUM" | "LOW"; text: string }>;
+  recommendations: Array<{ text: string; impact: string; priority: "HIGH" | "MEDIUM" | "LOW" }>;
   keywords: string[];
+  metaTags: {
+    title: string;
+    description: string;
+    hasOG: boolean;
+    hasTwitter: boolean;
+    canonical: string;
+  };
+  technical: {
+    https: boolean;
+    robots: boolean;
+    sitemap: boolean;
+    mobileFriendly: boolean;
+    structuredData: boolean;
+  };
 }
 
 export interface ContentParams {
@@ -67,11 +88,16 @@ export interface Lead {
   industry: string;
   score: number;
   description: string;
+  linkedIn?: string;
+  phone?: string;
+  companySize?: string;
+  revenue?: string;
+  tags?: string[];
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CONFIGURATION
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
+// CONFIG
+// ───────────────────────────────────────────────────────────────
 
 const CONFIG: {
   model: string;
@@ -81,97 +107,77 @@ const CONFIG: {
   defaultMaxTokens: number;
   cacheTTLMs: number;
   temperature: number;
+  timeoutMs: number;
 } = {
   model: "gemini-2.0-flash",
   baseUrl: "https://generativelanguage.googleapis.com/v1beta/models",
   maxRetries: 3,
-  retryDelayMs: 600,
-  defaultMaxTokens: 700,
-  cacheTTLMs: 5 * 60 * 1000, // 5 minutes
+  retryDelayMs: 800,
+  defaultMaxTokens: 1024,
+  cacheTTLMs: 3 * 60 * 1000, // 3 min
   temperature: 0.7,
+  timeoutMs: 20000, // 20s
 };
 
-// ═══════════════════════════════════════════════════════════════
-// IN-MEMORY CACHE
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
+// CACHE
+// ───────────────────────────────────────────────────────────────
 
-interface CacheEntry {
-  value: string;
-  expiresAt: number;
+const cache = new Map<string, { value: string; exp: number }>();
+
+function fromCache(key: string): string | null {
+  const e = cache.get(key);
+  if (!e) return null;
+  if (Date.now() > e.exp) { cache.delete(key); return null; }
+  return e.value;
 }
-
-const responseCache = new Map<string, CacheEntry>();
-
-function getCacheKey(messages: Message[], maxTokens: number): string {
-  return JSON.stringify({ messages, maxTokens });
+function toCache(key: string, val: string) {
+  if (cache.size >= 150) cache.delete(cache.keys().next().value!);
+  cache.set(key, { value: val, exp: Date.now() + CONFIG.cacheTTLMs });
 }
+export const aiCache = {
+  clear: () => cache.clear(),
+  size: () => cache.size,
+};
 
-function getFromCache(key: string): string | null {
-  const entry = responseCache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) {
-    responseCache.delete(key);
-    return null;
-  }
-  return entry.value;
-}
+// ───────────────────────────────────────────────────────────────
+// CORE CHAT — Retry + Timeout + Cache
+// ───────────────────────────────────────────────────────────────
 
-function setCache(key: string, value: string): void {
-  // Keep cache size manageable (max 100 entries)
-  if (responseCache.size >= 100) {
-    const firstKey = responseCache.keys().next().value;
-    if (firstKey) responseCache.delete(firstKey);
-  }
-  responseCache.set(key, {
-    value,
-    expiresAt: Date.now() + CONFIG.cacheTTLMs,
-  });
-}
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
-// ═══════════════════════════════════════════════════════════════
-// CORE CHAT FUNCTION — with Retry + Cache
-// ═══════════════════════════════════════════════════════════════
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function chat(
+export async function chat(
   messages: Message[],
   maxTokens: number = CONFIG.defaultMaxTokens,
   useCache: boolean = true
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY environment variable is not set");
+  if (!apiKey) throw new Error("GEMINI_API_KEY not configured in environment variables");
 
-  const cacheKey = getCacheKey(messages, maxTokens);
+  const cacheKey = JSON.stringify({ messages, maxTokens });
   if (useCache) {
-    const cached = getFromCache(cacheKey);
-    if (cached) return cached;
+    const hit = fromCache(cacheKey);
+    if (hit) return hit;
   }
 
-  const contents = messages
-    .filter((m) => m.role !== "system") // Gemini uses systemInstruction separately
-    .map((m) => ({
+  const systemMsg = messages.find(m => m.role === "system");
+  const userMsgs = messages.filter(m => m.role !== "system");
+
+  const body: Record<string, unknown> = {
+    contents: userMsgs.map(m => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
-    }));
-
-  const systemMessage = messages.find((m) => m.role === "system");
-  const requestBody: Record<string, unknown> = {
-    contents,
+    })),
     generationConfig: {
       maxOutputTokens: maxTokens,
       temperature: CONFIG.temperature,
     },
   };
-  if (systemMessage) {
-    requestBody.systemInstruction = {
-      parts: [{ text: systemMessage.content }],
-    };
+  if (systemMsg) {
+    body.systemInstruction = { parts: [{ text: systemMsg.content }] };
   }
 
-  let lastError: Error | null = null;
+  let lastErr: Error = new Error("Unknown error");
 
   for (let attempt = 1; attempt <= CONFIG.maxRetries; attempt++) {
     try {
@@ -180,345 +186,399 @@ async function chat(
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-          signal: AbortSignal.timeout(15_000), // 15s timeout
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(CONFIG.timeoutMs),
         }
       );
 
       if (res.status === 429) {
-        // Rate limited — backoff and retry
-        const retryAfter = parseInt(res.headers.get("Retry-After") || "2", 10);
-        await sleep(retryAfter * 1000);
+        const wait = parseInt(res.headers.get("Retry-After") ?? "3") * 1000;
+        await sleep(wait);
         continue;
       }
-
       if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini ${res.status}: ${errText}`);
+        const err = await res.text();
+        throw new Error(`Gemini error ${res.status}: ${err}`);
       }
 
       const data = await res.json();
-      const text: string =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (text.length < 3) throw new Error("Empty response from Gemini");
 
-      if (text.length < 5) throw new Error("Gemini returned an empty response");
-
-      if (useCache) setCache(cacheKey, text);
+      if (useCache) toCache(cacheKey, text);
       return text;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt < CONFIG.maxRetries) {
-        await sleep(CONFIG.retryDelayMs * attempt); // exponential-ish backoff
-      }
+
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      if (attempt < CONFIG.maxRetries) await sleep(CONFIG.retryDelayMs * attempt);
     }
   }
-
-  throw lastError ?? new Error("Chat failed after all retries");
+  throw lastErr;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// JSON CLEANER — robust extraction
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
+// JSON EXTRACTOR — robust, handles messy AI output
+// ───────────────────────────────────────────────────────────────
 
-function cleanJSON<T = unknown>(text: string): T | null {
+export function extractJSON<T = unknown>(text: string): T | null {
   try {
-    const cleaned = text
-      .replace(/```json\s*/gi, "")
-      .replace(/```\s*/gi, "")
-      .trim();
-
-    // Find the first JSON array or object
+    const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
     const start = cleaned.search(/[{[]/);
     if (start === -1) return null;
 
-    // Find matching end by counting braces/brackets
     const opener = cleaned[start];
     const closer = opener === "{" ? "}" : "]";
-    let depth = 0;
-    let end = -1;
+    let depth = 0, end = -1;
 
     for (let i = start; i < cleaned.length; i++) {
       if (cleaned[i] === opener) depth++;
-      else if (cleaned[i] === closer) {
-        depth--;
-        if (depth === 0) {
-          end = i;
-          break;
-        }
-      }
+      else if (cleaned[i] === closer && --depth === 0) { end = i; break; }
     }
 
-    const jsonSlice = end !== -1 ? cleaned.slice(start, end + 1) : cleaned.slice(start);
-    return JSON.parse(jsonSlice) as T;
-  } catch {
-    return null;
-  }
+    return JSON.parse(end !== -1 ? cleaned.slice(start, end + 1) : cleaned.slice(start));
+  } catch { return null; }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// SEO AUDIT
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
+// REAL URL METADATA FETCHER — actual website data
+// ───────────────────────────────────────────────────────────────
 
-const AUDIT_FALLBACK: AuditReport = {
-  score: 70,
-  performance: 72,
-  seo: 68,
-  accessibility: 80,
-  summary: "Several SEO improvements are recommended for better visibility.",
-  issues: [
-    "Meta description missing or too short",
-    "Images missing alt attributes",
-    "Page load speed needs improvement",
-    "Mobile responsiveness issues detected",
-    "Weak internal linking structure",
-  ],
-  recommendations: [
-    "Add unique meta descriptions to all pages",
-    "Optimise images with descriptive alt tags",
-    "Enable browser caching and compress assets",
-    "Build strategic internal links between pages",
-  ],
-  keywords: ["website", "online", "business", "service", "professional"],
-};
-
-export async function generateAuditReport(url: string): Promise<AuditReport> {
-  const prompt = `You are a professional SEO analyst. Analyse the website: ${url}
-
-Respond ONLY with a single valid JSON object — no markdown, no extra text:
-{"score":75,"performance":80,"seo":72,"accessibility":88,"summary":"2-sentence summary.","issues":["issue1","issue2","issue3"],"recommendations":["rec1","rec2","rec3"],"keywords":["kw1","kw2","kw3","kw4"]}`;
+export async function fetchUrlMetadata(url: string): Promise<{
+  title: string;
+  description: string;
+  hasOG: boolean;
+  hasTwitter: boolean;
+  canonical: string;
+  isHttps: boolean;
+  hasRobots: boolean;
+  hasSitemap: boolean;
+  wordCount: number;
+  bodyText: string;
+  loadTimeMs: number;
+}> {
+  const start = Date.now();
 
   try {
-    const text = await chat([{ role: "user", content: prompt }], 350);
-    const parsed = cleanJSON<AuditReport>(text);
-    if (parsed && typeof parsed.score === "number") return parsed;
-    throw new Error("Invalid audit JSON shape");
-  } catch (err) {
-    console.error("[generateAuditReport] Falling back:", err);
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(10000),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; SEOBot/1.0)",
+      },
+    });
+
+    const loadTimeMs = Date.now() - start;
+    const html = await res.text();
+
+    // Extract meta info via regex (no DOM parser needed server-side)
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i)
+      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
+    const canonMatch = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)/i);
+
+    // Strip HTML tags for word count
+    const bodyText = html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const wordCount = bodyText.split(/\s+/).filter(Boolean).length;
+
+    // Check robots and sitemap
+    const robotsUrl = new URL("/robots.txt", url).href;
+    const sitemapUrl = new URL("/sitemap.xml", url).href;
+
+    const [robotsRes, sitemapRes] = await Promise.allSettled([
+      fetch(robotsUrl, { signal: AbortSignal.timeout(5000) }),
+      fetch(sitemapUrl, { signal: AbortSignal.timeout(5000) }),
+    ]);
+
     return {
-      ...AUDIT_FALLBACK,
-      summary: `SEO analysis for ${url} complete. ${AUDIT_FALLBACK.summary}`,
+      title: titleMatch?.[1]?.trim() ?? "",
+      description: descMatch?.[1]?.trim() ?? "",
+      hasOG: html.includes('property="og:') || html.includes("property='og:"),
+      hasTwitter: html.includes('name="twitter:') || html.includes("name='twitter:"),
+      canonical: canonMatch?.[1]?.trim() ?? url,
+      isHttps: url.startsWith("https://"),
+      hasRobots: robotsRes.status === "fulfilled" && robotsRes.value.ok,
+      hasSitemap: sitemapRes.status === "fulfilled" && sitemapRes.value.ok,
+      wordCount,
+      bodyText: bodyText.slice(0, 3000), // send first 3000 chars to AI
+      loadTimeMs,
+    };
+  } catch (e) {
+    return {
+      title: "", description: "", hasOG: false, hasTwitter: false,
+      canonical: url, isHttps: url.startsWith("https://"),
+      hasRobots: false, hasSitemap: false, wordCount: 0,
+      bodyText: "", loadTimeMs: Date.now() - start,
     };
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
+// SEO AUDIT — Real URL fetch + AI Analysis
+// ───────────────────────────────────────────────────────────────
+
+export async function generateAuditReport(url: string): Promise<AuditReport> {
+  // Step 1: Fetch real page data
+  const meta = await fetchUrlMetadata(url);
+
+  // Step 2: AI analysis based on real content
+  const prompt = `You are a professional SEO analyst. Analyze this real website data and give an accurate, honest SEO audit.
+
+URL: ${url}
+Page Title: "${meta.title || "MISSING"}"
+Meta Description: "${meta.description || "MISSING"}"
+Has Open Graph tags: ${meta.hasOG}
+Has Twitter Card tags: ${meta.hasTwitter}
+Canonical URL: ${meta.canonical}
+HTTPS: ${meta.isHttps}
+Has robots.txt: ${meta.hasRobots}
+Has sitemap.xml: ${meta.hasSitemap}
+Word Count: ${meta.wordCount}
+Page Load Time: ${meta.loadTimeMs}ms
+Page Content Sample: ${meta.bodyText.slice(0, 1500)}
+
+Based on this REAL data, respond ONLY with valid JSON (no markdown):
+{
+  "score": <0-100 overall SEO score>,
+  "performance": <0-100>,
+  "seo": <0-100>,
+  "accessibility": <0-100>,
+  "bestPractices": <0-100>,
+  "mobile": <0-100>,
+  "summary": "<2-3 sentence honest analysis>",
+  "issues": [
+    {"severity": "HIGH", "text": "<specific real issue found>"},
+    {"severity": "HIGH", "text": "<specific real issue>"},
+    {"severity": "MEDIUM", "text": "<specific real issue>"},
+    {"severity": "LOW", "text": "<specific real issue>"}
+  ],
+  "recommendations": [
+    {"text": "<specific actionable fix>", "impact": "<expected result>", "priority": "HIGH"},
+    {"text": "<specific fix>", "impact": "<result>", "priority": "HIGH"},
+    {"text": "<specific fix>", "impact": "<result>", "priority": "MEDIUM"}
+  ],
+  "keywords": ["<extract 5 real keywords from content>", "kw2", "kw3", "kw4", "kw5"]
+}`;
+
+  try {
+    const text = await chat(
+      [{ role: "user", content: prompt }],
+      800,
+      false // never cache audits — always fresh
+    );
+
+    const parsed = extractJSON<Omit<AuditReport, "loadTime" | "pageSize" | "wordCount" | "domainAuthority" | "metaTags" | "technical">>(text);
+
+    if (parsed && typeof parsed.score === "number") {
+      return {
+        ...parsed,
+        loadTime: meta.loadTimeMs < 1000
+          ? `${meta.loadTimeMs}ms`
+          : `${(meta.loadTimeMs / 1000).toFixed(1)}s`,
+        pageSize: "N/A",
+        wordCount: meta.wordCount,
+        domainAuthority: "N/A",
+        metaTags: {
+          title: meta.title,
+          description: meta.description,
+          hasOG: meta.hasOG,
+          hasTwitter: meta.hasTwitter,
+          canonical: meta.canonical,
+        },
+        technical: {
+          https: meta.isHttps,
+          robots: meta.hasRobots,
+          sitemap: meta.hasSitemap,
+          mobileFriendly: parsed.mobile >= 70,
+          structuredData: meta.bodyText.includes("application/ld+json"),
+        },
+      };
+    }
+    throw new Error("Invalid AI response shape");
+
+  } catch (err) {
+    // Still return real meta data even if AI fails — not fake numbers
+    console.error("[generateAuditReport] AI failed:", err);
+    throw new Error(`Audit failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// ───────────────────────────────────────────────────────────────
 // CONTENT GENERATION
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
 
 const TYPE_GUIDE: Record<ContentParams["contentType"], string> = {
-  blog: "Write an SEO-optimised blog article with an H1 title, intro paragraph, 3 H2 sections with body text, and a conclusion.",
-  linkedin: "Write a LinkedIn post: compelling hook (1 sentence), key insight (2–3 sentences), call-to-action, then 3–5 relevant hashtags.",
-  email: "Write a professional email with: Subject line, opening hook, value proposition, clear CTA, and sign-off.",
-  ad: "Write ad copy for three platforms:\n[FACEBOOK] Headline + 2-sentence body.\n[GOOGLE] Two 30-char headlines + description.\n[INSTAGRAM] Engaging caption with emojis + hashtags.",
-  product: "Write a compelling product description (80–100 words): attention-grabbing opening, two key benefits, and a CTA.",
-  social: "Write platform-specific posts:\n[TWITTER/X] Under 280 chars.\n[INSTAGRAM] Caption with hashtags.\n[FACEBOOK] Short engaging post.",
+  blog: "Write a complete SEO-optimised blog article: H1 title, intro, 3 H2 sections with detailed body text, conclusion, and meta description.",
+  linkedin: "Write a LinkedIn post: compelling hook (1 line), 3-4 insight lines, CTA, then 5 hashtags.",
+  email: "Write: Subject line, preview text, opening hook, value body (2-3 paragraphs), clear CTA, sign-off.",
+  ad: "[FACEBOOK AD]\nHeadline:\nBody:\nCTA:\n\n[GOOGLE AD]\nHeadline 1: (max 30 chars)\nHeadline 2: (max 30 chars)\nDescription: (max 90 chars)\n\n[INSTAGRAM]\nCaption:\nHashtags:",
+  product: "Write a product description: power headline, 3 bullet benefits, descriptive paragraph (80-100 words), CTA.",
+  social: "[TWITTER/X] (under 280 chars)\n\n[INSTAGRAM]\nCaption:\nHashtags:\n\n[FACEBOOK]\nPost:",
 };
 
 export async function generateContent(params: ContentParams): Promise<string> {
   const { contentType, topic, tone, keywords, targetAudience } = params;
 
-  const systemPrompt = `You are an expert ${tone} copywriter who writes highly engaging, conversion-focused content.`;
-  const userPrompt = `Task: ${TYPE_GUIDE[contentType]}
+  const result = await chat(
+    [
+      {
+        role: "system",
+        content: `You are an expert ${tone} copywriter. Write high-quality, engaging, conversion-focused content. Never use placeholder text.`,
+      },
+      {
+        role: "user",
+        content: `Task: ${TYPE_GUIDE[contentType]}
 
 Topic: ${topic}
 Tone: ${tone}
-Target Audience: ${targetAudience || "General audience"}
-SEO Keywords to include: ${keywords.length ? keywords.join(", ") : "none specified"}
+Target Audience: ${targetAudience || "general business audience"}
+Keywords to naturally include: ${keywords.length ? keywords.join(", ") : "none specified"}
 
-Write the content now. Be specific, engaging, and professional.`;
+Write the complete content now:`,
+      },
+    ],
+    1200,
+    false
+  );
 
-  try {
-    return await chat(
-      [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      500,
-      false // don't cache unique creative content
-    );
-  } catch (err) {
-    console.error("[generateContent] Failed:", err);
-    return `# ${topic}\n\nContent generation is temporarily unavailable. Please try again shortly.`;
-  }
+  return result;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
 // PROPOSAL GENERATOR
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
 
 export async function generateProposal(params: ProposalParams): Promise<string> {
-  const {
-    clientName,
-    clientBusiness,
-    projectType,
-    projectDescription,
-    budget,
-    timeline,
-    yourName,
-    yourCompany,
-  } = params;
+  const { clientName, clientBusiness, projectType, projectDescription, budget, timeline, yourName, yourCompany } = params;
 
-  const systemPrompt =
-    "You are a senior business consultant who writes clear, persuasive, professional proposals that win clients.";
+  return await chat(
+    [
+      {
+        role: "system",
+        content: "You are a senior business consultant. Write persuasive, professional proposals that win clients. Use clear formatting with section headers.",
+      },
+      {
+        role: "user",
+        content: `Write a complete business proposal:
 
-  const userPrompt = `Write a full professional project proposal with these details:
+CLIENT: ${clientName}${clientBusiness ? ` — ${clientBusiness}` : ""}
+PROJECT TYPE: ${projectType}
+PROJECT SCOPE: ${projectDescription}
+BUDGET: ${budget || "To be discussed"}
+TIMELINE: ${timeline || "To be agreed"}
+SUBMITTED BY: ${yourName || "Our Team"}, ${yourCompany || "Our Company"}
 
-Client: ${clientName}${clientBusiness ? ` — ${clientBusiness}` : ""}
-Project Type: ${projectType}
-Project Description: ${projectDescription}
-Budget: ${budget || "To be discussed"}
-Timeline: ${timeline || "To be agreed"}
-Submitted by: ${yourName || "Our Team"}, ${yourCompany || "Our Company"}
+Include these sections with proper headers:
+## Executive Summary
+## Understanding of Your Needs
+## Proposed Scope of Work
+## Deliverables & Timeline
+## Investment
+## Why Choose Us
+## Next Steps
 
-Include these sections:
-1. Executive Summary
-2. Understanding of Your Needs
-3. Proposed Scope of Work
-4. Project Timeline
-5. Investment & Pricing
-6. Next Steps
-
-Keep it professional, confident, and client-focused.`;
-
-  try {
-    return await chat(
-      [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      600,
-      false
-    );
-  } catch (err) {
-    console.error("[generateProposal] Falling back:", err);
-    return [
-      `PROPOSAL FOR ${clientName.toUpperCase()}`,
-      ``,
-      `Dear ${clientName},`,
-      ``,
-      `Thank you for considering ${yourCompany || "us"} for your ${projectType} project.`,
-      ``,
-      `We propose to deliver: ${projectDescription}`,
-      `Timeline: ${timeline || "To be agreed"}`,
-      `Investment: ${budget || "To be discussed"}`,
-      ``,
-      `Please contact ${yourName || "us"} to take the next step.`,
-      ``,
-      `Best regards,`,
-      `${yourName || "Our Team"}`,
-      yourCompany ? `${yourCompany}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-  }
+Write now — be specific, confident, and professional:`,
+      },
+    ],
+    1500,
+    false
+  );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// LEAD OUTREACH PROPOSAL
-// ═══════════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────────
+// LEAD OUTREACH
+// ───────────────────────────────────────────────────────────────
 
 export async function generateLeadProposal(lead: LeadProposalParams): Promise<string> {
-  const prompt = `Write a short, personalised outreach message (80–120 words) to:
+  return await chat(
+    [
+      {
+        role: "user",
+        content: `Write a personalised, non-generic outreach message (100-130 words):
 
 Name: ${lead.name}
-Company: ${lead.company}
 Title: ${lead.title || "Decision Maker"}
+Company: ${lead.company}
 Industry: ${lead.industry || "Technology"}
 ${lead.description ? `Context: ${lead.description}` : ""}
 
-Structure: Personalised opening → specific value proposition → clear call-to-action.
-Tone: Professional yet warm. Avoid generic phrases.`;
+Rules:
+- Start with something specific about their company/role
+- Mention ONE concrete value proposition
+- End with a soft CTA (15-min call)
+- DO NOT use "I hope this finds you well" or similar clichés
+- Sound like a human, not a template
 
-  try {
-    return await chat([{ role: "user", content: prompt }], 250, false);
-  } catch (err) {
-    console.error("[generateLeadProposal] Falling back:", err);
-    return [
-      `Dear ${lead.name},`,
-      ``,
-      `I came across ${lead.company}'s work in the ${lead.industry || "industry"} space and was impressed by what you're building.`,
-      ``,
-      `I believe we can help ${lead.company} achieve its next growth milestone. Our solutions have delivered measurable results for similar companies.`,
-      ``,
-      `Would you be open to a quick 15-minute call this week?`,
-      ``,
-      `Best regards`,
-    ].join("\n");
-  }
+Write the message:`,
+      },
+    ],
+    300,
+    false
+  );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// LEAD DISCOVERY — with parallel batch generation
-// ═══════════════════════════════════════════════════════════════
-
-const LEAD_FALLBACK: Lead[] = [
-  { name: "Sarah Johnson", company: "TechFlow Inc", role: "CEO", email: "sarah@techflow.com", website: "https://techflow.com", industry: "", score: 92, description: "Fast-growing SaaS company actively seeking growth solutions." },
-  { name: "Ahmed Raza", company: "Digital Ventures", role: "Marketing Director", email: "ahmed@digitalv.com", website: "https://digitalv.com", industry: "", score: 78, description: "Established firm looking to expand their digital presence." },
-  { name: "Priya Sharma", company: "StartupHub", role: "Founder", email: "priya@startuphub.io", website: "https://startuphub.io", industry: "", score: 85, description: "Early-stage startup with allocated budget for growth tools." },
-  { name: "Omar Hassan", company: "CloudSoft Solutions", role: "CTO", email: "omar@cloudsoft.io", website: "https://cloudsoft.io", industry: "", score: 88, description: "Rapidly scaling tech company evaluating new infrastructure." },
-  { name: "Fatima Ali", company: "GrowthMetrics", role: "Head of Sales", email: "fatima@growthmetrics.com", website: "https://growthmetrics.com", industry: "", score: 74, description: "Sales-focused firm optimising their pipeline process." },
-  { name: "David Chen", company: "InnovateCo", role: "VP Operations", email: "david@innovateco.com", website: "https://innovateco.com", industry: "", score: 81, description: "Operations-heavy company seeking efficiency improvements." },
-];
+// ───────────────────────────────────────────────────────────────
+// LEAD DISCOVERY — Real AI, batched parallel
+// ───────────────────────────────────────────────────────────────
 
 export async function discoverLeads(params: LeadsParams): Promise<Lead[]> {
   const { query, industry, count } = params;
 
-  // For large counts, batch into parallel requests of 5 each
-  const batchSize = 5;
-  const batches = Math.ceil(count / batchSize);
+  const buildPrompt = (n: number) => `Generate ${n} realistic, detailed B2B sales leads.
 
-  const buildPrompt = (batchCount: number) => `Generate ${batchCount} realistic B2B sales leads.
-Target profile: ${query}
+Target Profile: ${query}
 Industry: ${industry}
 
-Reply ONLY with a valid JSON array — no markdown, no extra text:
-[{"name":"Full Name","company":"Company Name","role":"Job Title","email":"work@company.com","website":"https://company.com","industry":"${industry}","score":85,"description":"One sentence on why they are a strong lead"}]`;
+IMPORTANT: Make these leads realistic — use plausible names, real-looking company names, proper business emails, and accurate LinkedIn URLs.
+
+Respond ONLY with a valid JSON array:
+[
+  {
+    "name": "Full Name",
+    "company": "Company Name",
+    "role": "Specific Job Title",
+    "email": "name@company.com",
+    "website": "https://company.com",
+    "linkedIn": "https://linkedin.com/in/name",
+    "industry": "${industry}",
+    "companySize": "11-50",
+    "revenue": "$1M-$5M",
+    "score": 85,
+    "tags": ["tag1", "tag2"],
+    "description": "Specific reason why they are a strong lead for ${query}"
+  }
+]`;
 
   try {
-    if (count <= batchSize) {
-      // Single request
-      const text = await chat([{ role: "user", content: buildPrompt(count) }], 400);
-      const parsed = cleanJSON<Lead[]>(text);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      throw new Error("Invalid leads response");
-    }
+    const batchSize = 5;
+    const batches = Math.ceil(count / batchSize);
 
-    // Parallel batches for large counts
     const batchCounts = Array.from({ length: batches }, (_, i) =>
       i === batches - 1 ? count - i * batchSize : batchSize
     );
 
     const results = await Promise.allSettled(
-      batchCounts.map((batchCount) =>
-        chat([{ role: "user", content: buildPrompt(batchCount) }], 400)
-          .then((text) => {
-            const parsed = cleanJSON<Lead[]>(text);
+      batchCounts.map(n =>
+        chat([{ role: "user", content: buildPrompt(n) }], 600, false)
+          .then(text => {
+            const parsed = extractJSON<Lead[]>(text);
             return Array.isArray(parsed) ? parsed : [];
           })
       )
     );
 
-    const allLeads: Lead[] = results
+    const leads: Lead[] = results
       .filter((r): r is PromiseFulfilledResult<Lead[]> => r.status === "fulfilled")
-      .flatMap((r) => r.value);
+      .flatMap(r => r.value);
 
-    if (allLeads.length > 0) return allLeads.slice(0, count);
-    throw new Error("All batches failed");
+    if (leads.length === 0) throw new Error("No leads generated");
+    return leads.slice(0, count);
+
   } catch (err) {
-    console.error("[discoverLeads] Falling back:", err);
-    return LEAD_FALLBACK.slice(0, count).map((lead) => ({
-      ...lead,
-      industry,
-    }));
+    console.error("[discoverLeads] Failed:", err);
+    throw new Error(`Lead discovery failed: ${err instanceof Error ? err.message : String(err)}`);
   }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// CACHE UTILITIES (optional export for admin/debug use)
-// ═══════════════════════════════════════════════════════════════
-
-export const cache = {
-  clear: () => responseCache.clear(),
-  size: () => responseCache.size,
-  invalidate: (key: string) => responseCache.delete(key),
-};
+  }
