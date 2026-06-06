@@ -1,100 +1,151 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import AppLayout from "@/components/AppLayout";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  fileName?: string;
+  imagePreview?: string;
   timestamp: Date;
 }
-
-const SUGGESTED_PROMPTS = [
-  "Write a cold email for a SaaS product",
-  "How do I find B2B leads on LinkedIn?",
-  "Create a sales pitch for my agency",
-  "What's the best way to follow up with prospects?",
-  "Write a proposal for a web development project",
-  "How to improve my website's SEO?",
-];
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: "Salam! 👋 Main aapka AI Business Assistant hoon. Sales, marketing, SEO, proposals, lead generation — kisi bhi cheez mein help karun?",
+      content:
+        "👋 Hello! I'm your AI Business Assistant.\n\nI can help you with:\n• Business analysis & strategy\n• Proposals & content writing\n• SEO advice & audits\n• File & PDF analysis\n• Any business question\n\nAttach files (PDF, images, text) or just type your question!",
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{
+    name: string;
+    content: string;
+    type: string;
+    preview?: string;
+  } | null>(null);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 160) + "px";
-    }
-  }, [input]);
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const sendMessage = async (text?: string) => {
-    const content = (text || input).trim();
-    if (!content || loading) return;
+    const reader = new FileReader();
+
+    // Image file
+    if (file.type.startsWith("image/")) {
+      reader.onload = (ev) => {
+        const base64 = ev.target?.result as string;
+        setAttachedFile({
+          name: file.name,
+          content: `[Image file: ${file.name}]`,
+          type: "image",
+          preview: base64,
+        });
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // Text / PDF / CSV / other
+    reader.onload = (ev) => {
+      const content = ev.target?.result as string;
+      setAttachedFile({
+        name: file.name,
+        content: content.slice(0, 3000), // max 3000 chars
+        type: file.type,
+      });
+    };
+    reader.readAsText(file);
+  };
+
+  const removeFile = () => {
+    setAttachedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text && !attachedFile) return;
+    if (isLoading) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      content,
+      content: text || "Please analyze the attached file.",
+      fileName: attachedFile?.name,
+      imagePreview: attachedFile?.preview,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setInput("");
-    setLoading(true);
+    setIsLoading(true);
+
+    const fileToSend = attachedFile;
+    setAttachedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, userMsg]
-            .filter((m) => m.id !== "welcome")
-            .map((m) => ({ role: m.role, content: m.content })),
+          messages: updatedMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          fileContent: fileToSend?.content || null,
+          fileName: fileToSend?.name || null,
         }),
       });
 
       const data = await res.json();
-      const reply = data.reply || data.error || "Kuch masla hua. Dobara try karein.";
 
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.reply || data.error || "Something went wrong.",
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now().toString() + "_ai",
+          id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: reply,
-          timestamp: new Date(),
-        },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString() + "_err",
-          role: "assistant",
-          content: "⚠️ Network error. Please try again.",
+          content: "⚠️ Connection error. Please try again.",
           timestamp: new Date(),
         },
       ]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const copyText = (text: string) => {
+    navigator.clipboard.writeText(text);
   };
 
   const clearChat = () => {
@@ -102,143 +153,220 @@ export default function ChatPage() {
       {
         id: "welcome",
         role: "assistant",
-        content: "Salam! 👋 Main aapka AI Business Assistant hoon. Sales, marketing, SEO, proposals, lead generation — kisi bhi cheez mein help karun?",
+        content: "Chat cleared! How can I help you?",
         timestamp: new Date(),
       },
     ]);
   };
 
-  const formatTime = (date: Date) =>
-    date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const formatContent = (text: string) => {
+    return text.split("\n").map((line, i) => (
+      <span key={i}>
+        {line}
+        <br />
+      </span>
+    ));
+  };
 
   return (
-    <AppLayout title="AI Chat">
-      <div className="flex flex-col h-[calc(100vh-80px)] max-w-4xl mx-auto">
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-black">
-              AI <span className="text-[#00d9f5]">Chat</span>
-            </h1>
-            <p className="text-gray-400 text-xs mt-0.5">
-              Your business AI assistant — always ready
-            </p>
-          </div>
+    <div className="flex flex-col h-screen bg-[#0a0a0a]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-[#111]">
+        <div>
+          <h1 className="text-xl font-bold text-white">
+            💬 AI Chat{" "}
+            <span className="text-[#00d4aa]">Workspace</span>
+          </h1>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Powered by OpenRouter AI
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-xs text-[#00d4aa] bg-[#00d4aa]/10 px-3 py-1 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00d4aa] animate-pulse" />
+            AI Active
+          </span>
           <button
             onClick={clearChat}
-            className="text-xs text-gray-500 hover:text-gray-300 border border-white/10 rounded-lg px-3 py-1.5 transition-all hover:border-white/20"
+            className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-all"
           >
             Clear Chat
           </button>
         </div>
+      </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1 pb-2">
-          {messages.map((msg) => (
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`flex ${
+              msg.role === "user" ? "justify-end" : "justify-start"
+            }`}
+          >
             <div
-              key={msg.id}
-              className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+              className={`max-w-[80%] ${
+                msg.role === "user" ? "items-end" : "items-start"
+              } flex flex-col gap-1`}
             >
-              {/* Avatar */}
+              {/* Avatar + Name */}
               <div
-                className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${
-                  msg.role === "user"
-                    ? "bg-[#00d9f5] text-black"
-                    : "bg-[#1a1a2e] border border-[#00d9f5]/30 text-[#00d9f5]"
+                className={`flex items-center gap-2 ${
+                  msg.role === "user" ? "flex-row-reverse" : ""
                 }`}
               >
-                {msg.role === "user" ? "U" : "AI"}
-              </div>
-
-              {/* Bubble */}
-              <div
-                className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                  msg.role === "user"
-                    ? "bg-[#00d9f5] text-black rounded-tr-sm font-medium"
-                    : "bg-[#12121a] border border-white/10 text-gray-200 rounded-tl-sm"
-                }`}
-              >
-                {msg.content}
                 <div
-                  className={`text-[10px] mt-1.5 ${
-                    msg.role === "user" ? "text-black/50 text-right" : "text-gray-600"
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                    msg.role === "user"
+                      ? "bg-[#00d4aa] text-black"
+                      : "bg-gray-700 text-white"
                   }`}
                 >
-                  {formatTime(msg.timestamp)}
+                  {msg.role === "user" ? "U" : "AI"}
                 </div>
+                <span className="text-xs text-gray-500">
+                  {msg.role === "user" ? "You" : "AI Assistant"}
+                </span>
               </div>
-            </div>
-          ))}
 
-          {/* Typing indicator */}
-          {loading && (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold bg-[#1a1a2e] border border-[#00d9f5]/30 text-[#00d9f5]">
+              {/* Image Preview */}
+              {msg.imagePreview && (
+                <img
+                  src={msg.imagePreview}
+                  alt={msg.fileName}
+                  className="max-w-[200px] rounded-xl border border-gray-700 mb-1"
+                />
+              )}
+
+              {/* File badge */}
+              {msg.fileName && !msg.imagePreview && (
+                <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 mb-1">
+                  <span className="text-lg">📎</span>
+                  <span className="text-xs text-gray-300 truncate max-w-[200px]">
+                    {msg.fileName}
+                  </span>
+                </div>
+              )}
+
+              {/* Message bubble */}
+              <div
+                className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                  msg.role === "user"
+                    ? "bg-[#00d4aa] text-black rounded-tr-sm"
+                    : "bg-[#1a1a1a] border border-gray-800 text-gray-100 rounded-tl-sm"
+                }`}
+              >
+                {formatContent(msg.content)}
+              </div>
+
+              {/* Copy button */}
+              <button
+                onClick={() => copyText(msg.content)}
+                className="text-xs text-gray-600 hover:text-gray-400 transition-colors self-end"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {/* Typing indicator */}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-white">
                 AI
               </div>
-              <div className="bg-[#12121a] border border-white/10 rounded-2xl rounded-tl-sm px-4 py-3">
-                <div className="flex gap-1 items-center h-5">
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="w-2 h-2 bg-[#00d9f5] rounded-full animate-bounce"
-                      style={{ animationDelay: `${i * 0.15}s` }}
-                    />
-                  ))}
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-2xl rounded-tl-sm px-4 py-3">
+                <div className="flex gap-1 items-center">
+                  <div className="w-2 h-2 bg-[#00d4aa] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <div className="w-2 h-2 bg-[#00d4aa] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <div className="w-2 h-2 bg-[#00d4aa] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
               </div>
             </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-
-        {/* Suggested Prompts — only show at start */}
-        {messages.length <= 1 && (
-          <div className="flex gap-2 flex-wrap mb-3">
-            {SUGGESTED_PROMPTS.map((prompt) => (
-              <button
-                key={prompt}
-                onClick={() => sendMessage(prompt)}
-                className="text-xs bg-[#12121a] border border-white/10 rounded-xl px-3 py-2 text-gray-400 hover:text-white hover:border-[#00d9f5]/40 transition-all"
-              >
-                {prompt}
-              </button>
-            ))}
           </div>
         )}
+        <div ref={messagesEndRef} />
+      </div>
 
-        {/* Input Area */}
-        <div className="bg-[#12121a] border border-white/10 rounded-2xl p-3 flex gap-3 items-end mt-2">
+      {/* Attached file preview */}
+      {attachedFile && (
+        <div className="px-4 pb-2">
+          <div className="flex items-center gap-2 bg-[#1a1a1a] border border-[#00d4aa]/30 rounded-xl px-3 py-2">
+            {attachedFile.preview ? (
+              <img
+                src={attachedFile.preview}
+                alt=""
+                className="w-10 h-10 rounded-lg object-cover"
+              />
+            ) : (
+              <span className="text-2xl">
+                {attachedFile.type.includes("pdf") ? "📄" : "📎"}
+              </span>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-white font-medium truncate">
+                {attachedFile.name}
+              </p>
+              <p className="text-xs text-gray-500">Ready to send</p>
+            </div>
+            <button
+              onClick={removeFile}
+              className="text-gray-500 hover:text-red-400 text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Input Area */}
+      <div className="px-4 pb-4">
+        <div className="flex items-end gap-2 bg-[#1a1a1a] border border-gray-700 rounded-2xl px-3 py-2 focus-within:border-[#00d4aa]/50 transition-colors">
+          {/* File Upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt,.csv,.md,.jpg,.jpeg,.png,.webp"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="text-gray-500 hover:text-[#00d4aa] transition-colors p-1 flex-shrink-0 mb-1"
+            title="Attach file"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+          </button>
+
+          {/* Textarea */}
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-              }
-            }}
-            placeholder="Kuch bhi puchein... (Enter = send, Shift+Enter = new line)"
+            onKeyDown={handleKeyDown}
+            placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+            className="flex-1 bg-transparent text-white text-sm placeholder-gray-500 resize-none outline-none min-h-[40px] max-h-[120px] py-1"
             rows={1}
-            className="flex-1 bg-transparent text-white placeholder-gray-600 text-sm resize-none focus:outline-none leading-relaxed"
           />
+
+          {/* Send Button */}
           <button
-            onClick={() => sendMessage()}
-            disabled={loading || !input.trim()}
-            className="w-9 h-9 rounded-xl bg-[#00d9f5] text-black flex items-center justify-center flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#00d9f5]/80 transition-all"
+            onClick={sendMessage}
+            disabled={isLoading || (!input.trim() && !attachedFile)}
+            className="bg-[#00d4aa] hover:bg-[#00b894] disabled:bg-gray-700 disabled:cursor-not-allowed text-black font-bold rounded-xl px-4 py-2 text-sm transition-all flex-shrink-0 mb-0.5"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
+            {isLoading ? "..." : "Send"}
           </button>
         </div>
 
-        <p className="text-center text-[10px] text-gray-700 mt-2">
-          AI can make mistakes. Verify important information.
+        <p className="text-center text-xs text-gray-600 mt-2">
+          Supports PDF • Images • Text files • CSV
         </p>
       </div>
-    </AppLayout>
+    </div>
   );
-         }
+}
