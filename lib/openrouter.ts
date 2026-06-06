@@ -73,7 +73,15 @@ export interface Lead {
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
 
-const CONFIG = {
+const CONFIG: {
+  model: string;
+  baseUrl: string;
+  maxRetries: number;
+  retryDelayMs: number;
+  defaultMaxTokens: number;
+  cacheTTLMs: number;
+  temperature: number;
+} = {
   model: "gemini-1.5-flash",
   baseUrl: "https://generativelanguage.googleapis.com/v1beta/models",
   maxRetries: 3,
@@ -81,7 +89,7 @@ const CONFIG = {
   defaultMaxTokens: 700,
   cacheTTLMs: 5 * 60 * 1000, // 5 minutes
   temperature: 0.7,
-} as const;
+};
 
 // ═══════════════════════════════════════════════════════════════
 // IN-MEMORY CACHE
@@ -130,8 +138,8 @@ async function sleep(ms: number): Promise<void> {
 
 async function chat(
   messages: Message[],
-  maxTokens = CONFIG.defaultMaxTokens,
-  useCache = true
+  maxTokens: number = CONFIG.defaultMaxTokens,
+  useCache: boolean = true
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY environment variable is not set");
