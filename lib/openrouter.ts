@@ -82,7 +82,7 @@ const CONFIG: {
   cacheTTLMs: number;
   temperature: number;
 } = {
-  model: "gemini-1.5-flash",
+  model: "gemini-2.0-flash",
   baseUrl: "https://generativelanguage.googleapis.com/v1beta/models",
   maxRetries: 3,
   retryDelayMs: 600,
