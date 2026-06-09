@@ -1,41 +1,34 @@
-import type { Metadata } from "next";
-import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+
+const inter = Inter({
+  subsets: ["latin"]
+});
 
 export const metadata: Metadata = {
-  title: "AI Business OS — Ek Platform, Poora Business",
+  title: "LETSRANKUP AI",
   description:
-    "SEO audit, content generation, lead discovery, proposals, CRM — sab kuch ek jagah. Powered by AI.",
-  keywords: "AI business, SEO audit, content generation, CRM, lead discovery",
-  openGraph: {
-    title: "AI Business OS",
-    description: "Ek Platform. Poora Business.",
-    type: "website",
-  },
+    "Enterprise AI Business OS for SEO, GEO, CRM, Automation and Analytics",
+  keywords: [
+    "AI",
+    "SEO",
+    "GEO",
+    "CRM",
+    "Automation",
+    "Analytics"
+  ]
 };
 
 export default function RootLayout({
-  children,
+  children
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body>
+    <html lang="en">
+      <body className={inter.className}>
         {children}
-        <Analytics />
       </body>
     </html>
   );
