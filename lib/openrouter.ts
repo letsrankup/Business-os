@@ -1,6 +1,6 @@
 // lib/openrouter.ts
 // ═══════════════════════════════════════════════════════════════
-// PRODUCTION AI LIBRARY — Real Data · No Fake Fallbacks · Fast
+// PRODUCTION AI LIBRARY — OpenRouter Unified Integration
 // ═══════════════════════════════════════════════════════════════
 
 // ───────────────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ export interface Lead {
 }
 
 // ───────────────────────────────────────────────────────────────
-// CONFIG
+// CONFIG (Ab Yeh OpenRouter ke Endpoints Use Karega)
 // ───────────────────────────────────────────────────────────────
 
 const CONFIG: {
@@ -109,8 +109,8 @@ const CONFIG: {
   temperature: number;
   timeoutMs: number;
 } = {
-  model: "gemini-2.0-flash",
-  baseUrl: "https://generativelanguage.googleapis.com/v1beta/models",
+  model: "google/gemini-2.5-flash", // OpenRouter Standard Model format
+  baseUrl: "https://openrouter.ai/api/v1", // OpenRouter API Base URL
   maxRetries: 3,
   retryDelayMs: 800,
   defaultMaxTokens: 1024,
@@ -141,7 +141,7 @@ export const aiCache = {
 };
 
 // ───────────────────────────────────────────────────────────────
-// CORE CHAT — Retry + Timeout + Cache
+// CORE CHAT — OpenRouter Custom Payload Structure
 // ───────────────────────────────────────────────────────────────
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
@@ -151,8 +151,9 @@ export async function chat(
   maxTokens: number = CONFIG.defaultMaxTokens,
   useCache: boolean = true
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not configured in environment variables");
+  // Ab Yeh Sirf OPENROUTER_API_KEY use karega
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured in environment variables");
 
   const cacheKey = JSON.stringify({ messages, maxTokens });
   if (useCache) {
@@ -160,32 +161,28 @@ export async function chat(
     if (hit) return hit;
   }
 
-  const systemMsg = messages.find(m => m.role === "system");
-  const userMsgs = messages.filter(m => m.role !== "system");
-
-  const body: Record<string, unknown> = {
-    contents: userMsgs.map(m => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    })),
-    generationConfig: {
-      maxOutputTokens: maxTokens,
-      temperature: CONFIG.temperature,
-    },
+  // OpenRouter Standard Chat Completion Payload Format
+  const body = {
+    model: CONFIG.model,
+    messages: messages, // OpenRouter direct standard system/user/assistant array support karta hai
+    max_tokens: maxTokens,
+    temperature: CONFIG.temperature,
   };
-  if (systemMsg) {
-    body.systemInstruction = { parts: [{ text: systemMsg.content }] };
-  }
 
   let lastErr: Error = new Error("Unknown error");
 
   for (let attempt = 1; attempt <= CONFIG.maxRetries; attempt++) {
     try {
       const res = await fetch(
-        `${CONFIG.baseUrl}/${CONFIG.model}:generateContent?key=${apiKey}`,
+        `${CONFIG.baseUrl}/chat/completions`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+            "HTTP-Referer": "https://letsrankup.ai", // OpenRouter rankings ke liye optional headers
+            "X-Title": "LetsRankUp Business OS"
+          },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(CONFIG.timeoutMs),
         }
@@ -198,12 +195,13 @@ export async function chat(
       }
       if (!res.ok) {
         const err = await res.text();
-        throw new Error(`Gemini error ${res.status}: ${err}`);
+        throw new Error(`OpenRouter error ${res.status}: ${err}`);
       }
 
       const data = await res.json();
-      const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      if (text.length < 3) throw new Error("Empty response from Gemini");
+      // OpenRouter / OpenAI JSON Response parsing format
+      const text: string = data?.choices?.[0]?.message?.content ?? "";
+      if (text.length < 3) throw new Error("Empty response from OpenRouter");
 
       if (useCache) toCache(cacheKey, text);
       return text;
@@ -217,7 +215,7 @@ export async function chat(
 }
 
 // ───────────────────────────────────────────────────────────────
-// JSON EXTRACTOR — robust, handles messy AI output
+// JSON EXTRACTOR
 // ───────────────────────────────────────────────────────────────
 
 export function extractJSON<T = unknown>(text: string): T | null {
@@ -240,7 +238,7 @@ export function extractJSON<T = unknown>(text: string): T | null {
 }
 
 // ───────────────────────────────────────────────────────────────
-// REAL URL METADATA FETCHER — actual website data
+// REAL URL METADATA FETCHER
 // ───────────────────────────────────────────────────────────────
 
 export async function fetchUrlMetadata(url: string): Promise<{
@@ -269,13 +267,11 @@ export async function fetchUrlMetadata(url: string): Promise<{
     const loadTimeMs = Date.now() - start;
     const html = await res.text();
 
-    // Extract meta info via regex (no DOM parser needed server-side)
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i)
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
     const canonMatch = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)/i);
 
-    // Strip HTML tags for word count
     const bodyText = html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -284,7 +280,6 @@ export async function fetchUrlMetadata(url: string): Promise<{
       .trim();
     const wordCount = bodyText.split(/\s+/).filter(Boolean).length;
 
-    // Check robots and sitemap
     const robotsUrl = new URL("/robots.txt", url).href;
     const sitemapUrl = new URL("/sitemap.xml", url).href;
 
@@ -303,7 +298,7 @@ export async function fetchUrlMetadata(url: string): Promise<{
       hasRobots: robotsRes.status === "fulfilled" && robotsRes.value.ok,
       hasSitemap: sitemapRes.status === "fulfilled" && sitemapRes.value.ok,
       wordCount,
-      bodyText: bodyText.slice(0, 3000), // send first 3000 chars to AI
+      bodyText: bodyText.slice(0, 3000),
       loadTimeMs,
     };
   } catch (e) {
@@ -317,14 +312,12 @@ export async function fetchUrlMetadata(url: string): Promise<{
 }
 
 // ───────────────────────────────────────────────────────────────
-// SEO AUDIT — Real URL fetch + AI Analysis
+// SEO AUDIT
 // ───────────────────────────────────────────────────────────────
 
 export async function generateAuditReport(url: string): Promise<AuditReport> {
-  // Step 1: Fetch real page data
   const meta = await fetchUrlMetadata(url);
 
-  // Step 2: AI analysis based on real content
   const prompt = `You are a professional SEO analyst. Analyze this real website data and give an accurate, honest SEO audit.
 
 URL: ${url}
@@ -367,7 +360,7 @@ Based on this REAL data, respond ONLY with valid JSON (no markdown):
     const text = await chat(
       [{ role: "user", content: prompt }],
       800,
-      false // never cache audits — always fresh
+      false
     );
 
     const parsed = extractJSON<Omit<AuditReport, "loadTime" | "pageSize" | "wordCount" | "domainAuthority" | "metaTags" | "technical">>(text);
@@ -400,7 +393,6 @@ Based on this REAL data, respond ONLY with valid JSON (no markdown):
     throw new Error("Invalid AI response shape");
 
   } catch (err) {
-    // Still return real meta data even if AI fails — not fake numbers
     console.error("[generateAuditReport] AI failed:", err);
     throw new Error(`Audit failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -521,7 +513,7 @@ Write the message:`,
 }
 
 // ───────────────────────────────────────────────────────────────
-// LEAD DISCOVERY — Real AI, batched parallel
+// LEAD DISCOVERY
 // ───────────────────────────────────────────────────────────────
 
 export async function discoverLeads(params: LeadsParams): Promise<Lead[]> {
@@ -581,4 +573,4 @@ Respond ONLY with a valid JSON array:
     console.error("[discoverLeads] Failed:", err);
     throw new Error(`Lead discovery failed: ${err instanceof Error ? err.message : String(err)}`);
   }
-  }
+    }
