@@ -13,58 +13,62 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const GEMINI_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_KEY) {
+    // Ab Yeh Direct OPENROUTER_API_KEY use karega
+    const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+    if (!OPENROUTER_KEY) {
       return NextResponse.json(
-        { error: "Gemini API key not configured" },
+        { error: "OpenRouter API key not configured" },
         { status: 500 }
       );
     }
 
-    // OpenAI format → Gemini format convert karo
+    // OpenAI standard formats ko direct pass kiya ja sakta hai OpenRouter par
     const recentMessages = messages.slice(-6);
 
-    const contents = recentMessages.map((m: any) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
-
-    // File content last message mein add karo
-    if (fileContent && fileName && contents.length > 0) {
-      const last = contents[contents.length - 1];
-      last.parts[0].text += `\n\nAttached File: ${fileName}\nContent:\n${fileContent.slice(0, 1000)}`;
+    // File content ko last message mein inject karne ka aapka logic
+    if (fileContent && fileName && recentMessages.length > 0) {
+      const last = recentMessages[recentMessages.length - 1];
+      last.content += `\n\nAttached File: ${fileName}\nContent:\n${fileContent.slice(0, 1000)}`;
     }
 
+    // System instruction ko array ke shuru mein add karna OpenRouter standard hai
+    const systemInstruction = {
+      role: "system",
+      content: "You are an AI Business Assistant for Business OS. Help with business strategy, proposals, content writing, SEO analysis, and file analysis. Be professional, helpful, and concise."
+    };
+
+    const finalMessages = [systemInstruction, ...recentMessages];
+
+    // OpenRouter Unified API endpoint aur payload configuration
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENROUTER_KEY}`,
+          "HTTP-Referer": "https://letsrankup.ai",
+          "X-Title": "LetsRankUp Business OS"
+        },
         body: JSON.stringify({
-          system_instruction: {
-            parts: [
-              {
-                text: "You are an AI Business Assistant for Business OS. Help with business strategy, proposals, content writing, SEO analysis, and file analysis. Be professional, helpful, and concise.",
-              },
-            ],
-          },
-          contents,
-          generationConfig: {
-            maxOutputTokens: 800,
-            temperature: 0.7,
-          },
+          model: "google/gemini-2.5-flash", // OpenRouter Model Standard Name
+          messages: finalMessages,
+          max_tokens: 800,
+          temperature: 0.7,
         }),
       }
     );
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`Gemini error ${res.status}: ${err}`);
+      throw new Error(`OpenRouter error ${res.status}: ${err}`);
     }
 
     const data = await res.json();
+    
+    // OpenRouter / OpenAI format ke mutabiq reply extract karna
     const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      data?.choices?.[0]?.message?.content ||
       "Could not generate response. Please try again.";
 
     return NextResponse.json({ reply });
@@ -75,4 +79,5 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-  }
+        }
+        
