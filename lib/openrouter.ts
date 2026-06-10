@@ -169,3 +169,44 @@ export async function streamOpenRouter(
     }),
   });
 }
+
+// ==========================================
+// ADDED FOR PROPOSAL ROUTE COMPATIBILITY
+// ==========================================
+
+/**
+ * Generates a regular proposal using the standard fallback mechanism
+ */
+export async function generateProposal(data: any): Promise<any> {
+  const systemPrompt = "You are an expert business proposal generator. Create a professional and structured proposal based on the provided details.";
+  const userPrompt = typeof data === "string" ? data : JSON.stringify(data);
+
+  const response = await callOpenRouter(
+    [{ role: "user", content: userPrompt }],
+    { system: systemPrompt }
+  );
+  
+  return {
+    proposal: response.content,
+    model: response.model
+  };
+}
+
+/**
+ * Generates a lead-specific proposal using the standard fallback mechanism
+ */
+export async function generateLeadProposal(data: any): Promise<any> {
+  const systemPrompt = "You are a sales specialist. Generate a highly persuasive, customized business proposal tailored specifically to convert this lead.";
+  const userPrompt = typeof data === "string" ? data : JSON.stringify(data);
+
+  const response = await callOpenRouter(
+    [{ role: "user", content: userPrompt }],
+    { system: systemPrompt }
+  );
+
+  return {
+    proposal: response.content,
+    model: response.model
+  };
+    }
+  
