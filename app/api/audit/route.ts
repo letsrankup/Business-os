@@ -1,64 +1,97 @@
-// app/api/audit/route.ts
-// Real SEO audit — fetches actual URL data, no fake numbers
-
+// File: app/api/audit/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { generateAuditReport } from "@/lib/openrouter";
+import { createClient } from "@/lib/supabase";
 
-export const runtime = "nodejs";
-export const maxDuration = 30; // Vercel max for hobby plan
-
-function isValidUrl(url: string): boolean {
+// GET: List all audits for user
+export async function GET(req: NextRequest) {
   try {
-    const u = new URL(url);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const limit = parseInt(searchParams.get("limit") ?? "20");
+    const page = parseInt(searchParams.get("page") ?? "1");
+    const offset = (page - 1) * limit;
+
+    const { data, count, error: dbError } = await supabase
+      .from("seo_audits")
+      .select("*", { count: "exact" })
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (dbError) throw dbError;
+
+    return NextResponse.json({ audits: data, total: count, page, limit });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-function normalizeUrl(url: string): string {
-  const trimmed = url.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return `https://${trimmed}`;
-}
-
+// POST: Create new audit
 export async function POST(req: NextRequest) {
   try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await req.json();
-    const rawUrl: string = body?.url ?? "";
+    const { url, domain } = body;
 
-    if (!rawUrl) {
-      return NextResponse.json(
-        { error: "URL is required" },
-        { status: 400 }
-      );
-    }
+    if (!url) return NextResponse.json({ error: "URL is required" }, { status: 400 });
 
-    const url = normalizeUrl(rawUrl);
+    // Insert audit record with pending status
+    const { data, error: insertError } = await supabase
+      .from("seo_audits")
+      .insert({
+        user_id: user.id,
+        url,
+        domain: domain ?? new URL(url).hostname,
+        status: "pending",
+        score: null,
+        results: null,
+      })
+      .select()
+      .single();
 
-    if (!isValidUrl(url)) {
-      return NextResponse.json(
-        { error: "Invalid URL. Please enter a valid website URL." },
-        { status: 400 }
-      );
-    }
+    if (insertError) throw insertError;
 
-    const report = await generateAuditReport(url);
+    // Log activity
+    await supabase.from("activity_logs").insert({
+      user_id: user.id,
+      type: "seo_audit",
+      description: `SEO Audit started for ${url}`,
+      metadata: { audit_id: data.id },
+    });
 
-    return NextResponse.json({ success: true, data: report });
-
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Audit failed";
-    console.error("[/api/audit]", message);
-
-    // Return specific error — no fake fallback data
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ audit: data }, { status: 201 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ status: "SEO Audit API is running" });
-      }
+// DELETE: Remove audit by id
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Audit ID required" }, { status: 400 });
+
+    const { error: deleteError } = await supabase
+      .from("seo_audits")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (deleteError) throw deleteError;
+
+    return NextResponse.json({ message: "Audit deleted" });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+    }
