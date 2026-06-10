@@ -1,137 +1,184 @@
-// File: app/api/proposals/route.ts
+// app/api/proposals/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
 import { callOpenRouter } from "@/lib/openrouter";
-import { checkAndIncrementUsage } from "@/lib/rateLimit";
+import { checkRateLimit, getClientId, getRateLimitHeaders } from "@/lib/rateLimit";
 
-// GET: List proposals
+// GET - Fetch proposals
 export async function GET(req: NextRequest) {
+  const clientId = getClientId(req.headers);
+  const rateLimit = checkRateLimit(`proposals-get:${clientId}`, { max: 30 });
+  if (!rateLimit.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   try {
     const supabase = createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
-    const limit = parseInt(searchParams.get("limit") ?? "20");
-    const page = parseInt(searchParams.get("page") ?? "1");
-    const offset = (page - 1) * limit;
+    const status = searchParams.get("status");
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
-    const { data, count, error: dbError } = await supabase
+    let query = supabase
       .from("proposals")
       .select("*", { count: "exact" })
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
+      .limit(limit);
 
-    if (dbError) throw dbError;
-    return NextResponse.json({ proposals: data, total: count, page, limit });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    if (status) query = query.eq("status", status);
+
+    const { data, count, error } = await query;
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, data, total: count });
+  } catch (error) {
+    console.error("Proposals GET error:", error);
+    return NextResponse.json({ error: "Failed to fetch proposals" }, { status: 500 });
   }
 }
 
-// POST: Generate proposal with AI
+// POST - Create or AI-generate proposal
 export async function POST(req: NextRequest) {
+  const clientId = getClientId(req.headers);
+  const rateLimit = checkRateLimit(`proposals-post:${clientId}`, { max: 10, windowMs: 60_000 });
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: getRateLimitHeaders(rateLimit) }
+    );
+  }
+
   try {
     const supabase = createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
-    // Rate limit check
-    const limit = await checkAndIncrementUsage(supabase, user.id, "proposal");
-    if (!limit.allowed) {
-      return NextResponse.json(
-        { error: limit.reason, remaining: limit.remaining },
-        { status: 429 }
-      );
-    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const {
-      yourName, yourCompany, clientName, clientBusiness,
-      budget, projectType, timeline, projectDescription,
-    } = body;
+    const { action, ...proposalData } = body;
 
-    if (!clientName || !projectDescription) {
-      return NextResponse.json({ error: "Client name and project description required" }, { status: 400 });
+    // AI Generate Proposal
+    if (action === "generate") {
+      const { clientName, projectType, budget, description, currency = "USD" } = body;
+
+      if (!clientName || !projectType) {
+        return NextResponse.json(
+          { error: "clientName and projectType are required" },
+          { status: 400 }
+        );
+      }
+
+      const aiResult = await callOpenRouter(
+        [
+          {
+            role: "user",
+            content: `Create a professional business proposal with the following details:
+Client: ${clientName}
+Project Type: ${projectType}
+Budget: ${budget ? `${currency} ${budget}` : "To be discussed"}
+Description: ${description || "Not provided"}
+
+Return ONLY valid JSON (no markdown):
+{
+  "title": "<proposal title>",
+  "executive_summary": "<2-3 paragraph executive summary>",
+  "scope_of_work": ["<deliverable 1>", "<deliverable 2>", ...],
+  "timeline": [
+    {"phase": "<phase name>", "duration": "<duration>", "deliverables": ["<item>"]}
+  ],
+  "pricing": [
+    {"item": "<service/item>", "description": "<details>", "quantity": <number>, "unit_price": <number>}
+  ],
+  "total_amount": <total number>,
+  "terms": "<payment and project terms>",
+  "next_steps": "<call to action>"
+}`,
+          },
+        ],
+        {
+          system: "You are a professional business proposal writer. Create compelling, detailed proposals. Return valid JSON only.",
+          temperature: 0.6,
+          max_tokens: 2500,
+        }
+      );
+
+      let content: Record<string, unknown> = {};
+      let totalAmount = 0;
+      try {
+        const cleaned = aiResult.content.replace(/```json|```/g, "").trim();
+        content = JSON.parse(cleaned);
+        totalAmount = Number(content.total_amount) || 0;
+      } catch {
+        content = { raw: aiResult.content };
+      }
+
+      const { data, error } = await supabase
+        .from("proposals")
+        .insert({
+          user_id: user.id,
+          title: (content.title as string) || `Proposal for ${clientName}`,
+          client_name: clientName,
+          status: "draft",
+          content,
+          total_amount: totalAmount,
+          currency,
+          ai_generated: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return NextResponse.json({
+        success: true,
+        data,
+        model: aiResult.model,
+      }, { status: 201 });
     }
 
-    const prompt = `You are a professional business proposal writer. Generate a detailed, compelling client proposal.
+    // Manual create
+    const { title, client_name } = proposalData;
+    if (!title || !client_name) {
+      return NextResponse.json({ error: "title and client_name are required" }, { status: 400 });
+    }
 
-Freelancer/Agency: ${yourName ?? "Our Agency"} ${yourCompany ? `(${yourCompany})` : ""}
-Client: ${clientName} ${clientBusiness ? `— ${clientBusiness}` : ""}
-Project Type: ${projectType ?? "Web Development"}
-Budget: ${budget ?? "To be discussed"}
-Timeline: ${timeline ?? "4 weeks"}
-Project Description: ${projectDescription}
-
-Write a full professional proposal with:
-1. Executive Summary
-2. Project Scope & Deliverables
-3. Timeline & Milestones
-4. Investment (pricing breakdown)
-5. Why Us
-6. Next Steps
-
-Be specific, professional, and persuasive. Use the actual details provided.`;
-
-    const proposalText = await callOpenRouter(
-      [{ role: "user", content: prompt }],
-      { model: "smart", maxTokens: 2000 }
-    );
-
-    const { data: saved, error: saveError } = await supabase
+    const { data, error } = await supabase
       .from("proposals")
-      .insert({
-        user_id: user.id,
-        client_name: clientName,
-        client_business: clientBusiness ?? null,
-        your_name: yourName ?? null,
-        your_company: yourCompany ?? null,
-        budget: budget ?? null,
-        project_type: projectType ?? "Web Development",
-        timeline: timeline ?? "4 weeks",
-        project_description: projectDescription,
-        content: proposalText,
-        status: "draft",
-      })
+      .insert({ ...proposalData, user_id: user.id })
       .select()
       .single();
 
-    if (saveError) throw saveError;
-
-    await supabase.from("activity_logs").insert({
-      user_id: user.id,
-      type: "proposal_generated",
-      description: `Proposal created for ${clientName}`,
-      metadata: { proposal_id: saved.id },
-    });
-
+    if (error) throw error;
+    return NextResponse.json({ success: true, data }, { status: 201 });
+  } catch (error) {
+    console.error("Proposals POST error:", error);
     return NextResponse.json(
-      { proposal: saved, remaining: limit.remaining },
-      { status: 201 }
+      { error: error instanceof Error ? error.message : "Failed to create proposal" },
+      { status: 500 }
     );
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-// PATCH: Update proposal status
+// PATCH - Update proposal
 export async function PATCH(req: NextRequest) {
   try {
     const supabase = createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { id, status, content } = body;
+    const { id, ...updates } = body;
     if (!id) return NextResponse.json({ error: "Proposal ID required" }, { status: 400 });
 
-    const updates: any = { updated_at: new Date().toISOString() };
-    if (status) updates.status = status;
-    if (content) updates.content = content;
-
-    const { data, error: updateError } = await supabase
+    const { data, error } = await supabase
       .from("proposals")
       .update(updates)
       .eq("id", id)
@@ -139,33 +186,37 @@ export async function PATCH(req: NextRequest) {
       .select()
       .single();
 
-    if (updateError) throw updateError;
-    return NextResponse.json({ proposal: data });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    if (error) throw error;
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error("Proposals PATCH error:", error);
+    return NextResponse.json({ error: "Failed to update proposal" }, { status: 500 });
   }
 }
 
-// DELETE: Remove proposal
+// DELETE
 export async function DELETE(req: NextRequest) {
   try {
     const supabase = createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Proposal ID required" }, { status: 400 });
 
-    const { error: deleteError } = await supabase
+    const { error } = await supabase
       .from("proposals")
       .delete()
       .eq("id", id)
       .eq("user_id", user.id);
 
-    if (deleteError) throw deleteError;
-    return NextResponse.json({ message: "Proposal deleted" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    if (error) throw error;
+    return NextResponse.json({ success: true, message: "Proposal deleted" });
+  } catch (error) {
+    console.error("Proposals DELETE error:", error);
+    return NextResponse.json({ error: "Failed to delete proposal" }, { status: 500 });
   }
-      }
+                                            }
