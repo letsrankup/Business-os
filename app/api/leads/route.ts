@@ -1,42 +1,131 @@
-// app/api/leads/route.ts
-// Real AI-powered lead discovery — no hardcoded fake leads
-
+// File: app/api/leads/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { discoverLeads } from "@/lib/openrouter";
+import { createClient } from "@/lib/supabase";
 
-export const runtime = "nodejs";
-export const maxDuration = 30;
-
-export async function POST(req: NextRequest) {
+// GET: Fetch leads with filters
+export async function GET(req: NextRequest) {
   try {
-    const body = await req.json();
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const query: string = body?.query?.trim() ?? "";
-    const industry: string = body?.industry?.trim() ?? "Technology";
-    const count: number = Math.min(Math.max(parseInt(body?.count ?? "6"), 1), 15);
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get("status"); // new | contacted | converted | lost
+    const limit = parseInt(searchParams.get("limit") ?? "20");
+    const page = parseInt(searchParams.get("page") ?? "1");
+    const offset = (page - 1) * limit;
 
-    if (!query) {
-      return NextResponse.json(
-        { error: "Target description (query) is required" },
-        { status: 400 }
-      );
-    }
+    let query = supabase
+      .from("leads")
+      .select("*", { count: "exact" })
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    const leads = await discoverLeads({ query, industry, count });
+    if (status) query = query.eq("status", status);
 
-    return NextResponse.json({ success: true, data: leads, count: leads.length });
+    const { data, count, error: dbError } = await query;
+    if (dbError) throw dbError;
 
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Lead discovery failed";
-    console.error("[/api/leads]", message);
-
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ leads: data, total: count, page, limit });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ status: "Leads API is running" });
-      }
+// POST: Add new lead
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
+    const { name, email, phone, company, website, source, notes } = body;
+
+    if (!name || !email) {
+      return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
+    }
+
+    const { data, error: insertError } = await supabase
+      .from("leads")
+      .insert({
+        user_id: user.id,
+        name,
+        email,
+        phone: phone ?? null,
+        company: company ?? null,
+        website: website ?? null,
+        source: source ?? "manual",
+        notes: notes ?? null,
+        status: "new",
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    await supabase.from("activity_logs").insert({
+      user_id: user.id,
+      type: "lead_added",
+      description: `New lead added: ${name}`,
+      metadata: { lead_id: data.id },
+    });
+
+    return NextResponse.json({ lead: data }, { status: 201 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// PATCH: Update lead status or info
+export async function PATCH(req: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
+    const { id, ...updates } = body;
+    if (!id) return NextResponse.json({ error: "Lead ID required" }, { status: 400 });
+
+    const { data, error: updateError } = await supabase
+      .from("leads")
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    return NextResponse.json({ lead: data });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// DELETE: Remove lead
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Lead ID required" }, { status: 400 });
+
+    const { error: deleteError } = await supabase
+      .from("leads")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (deleteError) throw deleteError;
+
+    return NextResponse.json({ message: "Lead deleted" });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+  }
