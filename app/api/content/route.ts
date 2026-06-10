@@ -604,7 +604,7 @@ export async function GET(req: NextRequest) {
     const sortBy = searchParams.get("sort") ?? "created_at";
     const sortDir = searchParams.get("dir") === "asc";
 
-    // Single item fetch
+        // Single item fetch
     const id = searchParams.get("id");
     if (id) {
       const { data, error: dbError } = await supabase
@@ -617,4 +617,322 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ content: data });
     }
 
-    l
+    let query = supabase
+      .from("generated_content")
+      .select("*", { count: "exact" })
+      .eq("user_id", user.id)
+      .order(sortBy, { ascending: sortDir })
+      .range(offset, offset + limit - 1);
+
+    if (type) query = query.eq("type", type);
+    if (search) query = query.ilike("topic", `%${search}%`);
+
+    const { data, count, error: dbError } = await query;
+    if (dbError) throw dbError;
+
+    // Usage stats
+    const { data: usageData } = await supabase
+      .from("ai_usage")
+      .select("daily_count, monthly_count, last_day, last_month")
+      .eq("user_id", user.id)
+      .eq("feature", "content_ai")
+      .single();
+
+    const today = new Date().toISOString().split("T")[0];
+    const thisMonth = today.substring(0, 7);
+
+    return NextResponse.json({
+      content: data,
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil((count ?? 0) / limit),
+      usage: {
+        dailyUsed: usageData?.last_day === today ? usageData.daily_count : 0,
+        monthlyUsed: usageData?.last_month === thisMonth ? usageData.monthly_count : 0,
+      },
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// ─── POST: Generate content ───────────────────────────────────────────────────
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Rate limit check
+    const rateLimit = await checkAndIncrementUsage(supabase, user.id, "content_ai");
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: rateLimit.reason,
+          remaining: rateLimit.remaining,
+          upgradeUrl: "/settings?tab=billing",
+        },
+        { status: 429 }
+      );
+    }
+
+    const body: ContentInput = await req.json();
+    const {
+      type,
+      topic,
+      tone,
+      keywords,
+      targetAudience,
+      wordCount,
+      language,
+      goal,
+      stream: useStream = false,
+      rewriteId,
+      rewriteInstruction,
+    } = body;
+
+    if (!type || !topic) {
+      return NextResponse.json(
+        { error: "type and topic are required" },
+        { status: 400 }
+      );
+    }
+
+    if (!CONTENT_PROMPTS[type]) {
+      return NextResponse.json(
+        {
+          error: `Invalid content type: ${type}`,
+          validTypes: Object.keys(CONTENT_PROMPTS),
+        },
+        { status: 400 }
+      );
+    }
+
+    // ── Rewrite mode ─────────────────────────────────────────────────────────
+    if (rewriteId) {
+      const { data: original, error: fetchError } = await supabase
+        .from("generated_content")
+        .select("*")
+        .eq("id", rewriteId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (fetchError || !original) {
+        return NextResponse.json({ error: "Original content not found" }, { status: 404 });
+      }
+
+      const rewritePrompt = `You are an expert content editor. Rewrite the following content based on this instruction:
+
+INSTRUCTION: ${rewriteInstruction ?? "Improve clarity, engagement, and overall quality"}
+
+ORIGINAL CONTENT:
+${original.content}
+
+Return only the rewritten content. Maintain the same format and structure unless the instruction says otherwise.`;
+
+      const model = CONTENT_MODELS[type] ?? DEFAULT_MODEL;
+      const rewritten = await callOpenRouter(
+        model,
+        "You are an expert content writer and editor.",
+        rewritePrompt,
+        3000
+      );
+
+      const analysis = analyzeContent(rewritten, keywords ?? original.keywords ?? "");
+
+      const { data: saved, error: saveError } = await supabase
+        .from("generated_content")
+        .insert({
+          user_id: user.id,
+          type,
+          topic: original.topic,
+          tone: tone ?? original.tone,
+          keywords: keywords ?? original.keywords,
+          target_audience: targetAudience ?? original.target_audience,
+          language: language ?? original.language ?? "English",
+          content: rewritten,
+          word_count: analysis.wordCount,
+          reading_time_min: analysis.readingTimeMin,
+          seo_score: analysis.seoScore,
+          readability_score: analysis.fleschReadabilityScore,
+          keyword_density: analysis.keywordDensity,
+          model_used: model,
+          is_rewrite: true,
+          original_id: rewriteId,
+        })
+        .select()
+        .single();
+
+      if (saveError) throw saveError;
+
+      return NextResponse.json(
+        { content: saved, analysis, remaining: rateLimit.remaining },
+        { status: 201 }
+      );
+    }
+
+    // ── Build prompt ──────────────────────────────────────────────────────────
+    const promptFn = CONTENT_PROMPTS[type];
+    const fullPrompt = promptFn({
+      type, topic, tone, keywords, targetAudience, wordCount, language, goal,
+    });
+
+    const model = CONTENT_MODELS[type] ?? DEFAULT_MODEL;
+    const maxTok = type === "blog_article" || type === "youtube_script" || type === "case_study"
+      ? 4000
+      : type === "email_campaign" || type === "newsletter"
+      ? 3000
+      : 2000;
+
+    const systemPrompt =
+      "You are a world-class content creator and digital marketing expert. " +
+      "Generate content that is engaging, accurate, and optimized for its platform. " +
+      "Always follow the exact structure and format requested. Return only the content.";
+
+    // ── Streaming mode ────────────────────────────────────────────────────────
+    if (useStream) {
+      const stream = await streamOpenRouter(model, systemPrompt, fullPrompt, maxTok);
+
+      return new NextResponse(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "X-Content-Type": type,
+          "X-Model-Used": model,
+          "X-Remaining-Daily": String(rateLimit.remaining?.daily ?? ""),
+          "X-Remaining-Monthly": String(rateLimit.remaining?.monthly ?? ""),
+        },
+      });
+    }
+
+    // ── Non-streaming mode ────────────────────────────────────────────────────
+    const generatedText = await callOpenRouter(model, systemPrompt, fullPrompt, maxTok);
+    const analysis = analyzeContent(generatedText, keywords ?? "");
+
+    // Save to Supabase
+    const { data: saved, error: saveError } = await supabase
+      .from("generated_content")
+      .insert({
+        user_id: user.id,
+        type,
+        topic,
+        tone: tone ?? "Professional",
+        keywords: keywords ?? null,
+        target_audience: targetAudience ?? null,
+        language: language ?? "English",
+        content: generatedText,
+        word_count: analysis.wordCount,
+        reading_time_min: analysis.readingTimeMin,
+        seo_score: analysis.seoScore,
+        readability_score: analysis.fleschReadabilityScore,
+        keyword_density: analysis.keywordDensity,
+        model_used: model,
+        is_rewrite: false,
+        original_id: null,
+      })
+      .select()
+      .single();
+
+    if (saveError) throw saveError;
+
+    // Activity log
+    await supabase.from("activity_logs").insert({
+      user_id: user.id,
+      type: "content_generated",
+      description: `Generated ${type}: "${topic.substring(0, 60)}"`,
+      metadata: {
+        content_id: saved.id,
+        type,
+        word_count: analysis.wordCount,
+        seo_score: analysis.seoScore,
+        model_used: model,
+      },
+    });
+
+    return NextResponse.json(
+      {
+        content: saved,
+        analysis,
+        remaining: rateLimit.remaining,
+      },
+      { status: 201 }
+    );
+  } catch (err: any) {
+    console.error("[Content AI Error]", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// ─── PATCH: Update content (title/notes) or mark as favourite ────────────────
+export async function PATCH(req: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
+    const { id, favourite, notes, topic } = body;
+    if (!id) return NextResponse.json({ error: "Content ID required" }, { status: 400 });
+
+    const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (typeof favourite === "boolean") updates.favourite = favourite;
+    if (notes !== undefined) updates.notes = notes;
+    if (topic !== undefined) updates.topic = topic;
+
+    const { data, error: updateError } = await supabase
+      .from("generated_content")
+      .update(updates)
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    return NextResponse.json({ content: data });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// ─── DELETE: Remove content ───────────────────────────────────────────────────
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    const bulk = searchParams.get("bulk"); // comma-separated IDs
+
+    if (!id && !bulk) {
+      return NextResponse.json({ error: "ID or bulk IDs required" }, { status: 400 });
+    }
+
+    if (bulk) {
+      const ids = bulk.split(",").map((i) => i.trim()).filter(Boolean);
+      const { error: deleteError } = await supabase
+        .from("generated_content")
+        .delete()
+        .in("id", ids)
+        .eq("user_id", user.id);
+      if (deleteError) throw deleteError;
+      return NextResponse.json({ message: `${ids.length} items deleted` });
+    }
+
+    const { error: deleteError } = await supabase
+      .from("generated_content")
+      .delete()
+      .eq("id", id!)
+      .eq("user_id", user.id);
+
+    if (deleteError) throw deleteError;
+
+    return NextResponse.json({ message: "Content deleted" });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+      }
