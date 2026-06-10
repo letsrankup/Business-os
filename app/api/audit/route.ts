@@ -1,97 +1,149 @@
-// File: app/api/audit/route.ts
+// app/api/audit/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
+import { callOpenRouter } from "@/lib/openrouter";
+import { checkRateLimit, getClientId, getRateLimitHeaders } from "@/lib/rateLimit";
 
-// GET: List all audits for user
-export async function GET(req: NextRequest) {
-  try {
-    const supabase = createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const { searchParams } = new URL(req.url);
-    const limit = parseInt(searchParams.get("limit") ?? "20");
-    const page = parseInt(searchParams.get("page") ?? "1");
-    const offset = (page - 1) * limit;
-
-    const { data, count, error: dbError } = await supabase
-      .from("seo_audits")
-      .select("*", { count: "exact" })
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (dbError) throw dbError;
-
-    return NextResponse.json({ audits: data, total: count, page, limit });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-
-// POST: Create new audit
 export async function POST(req: NextRequest) {
+  const clientId = getClientId(req.headers);
+  const rateLimit = checkRateLimit(`audit:${clientId}`, { max: 10, windowMs: 60_000 });
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait before running another audit." },
+      { status: 429, headers: getRateLimitHeaders(rateLimit) }
+    );
+  }
+
   try {
-    const supabase = createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const body = await req.json();
-    const { url, domain } = body;
+    const { url } = body;
 
-    if (!url) return NextResponse.json({ error: "URL is required" }, { status: 400 });
+    if (!url || typeof url !== "string") {
+      return NextResponse.json({ error: "URL is required" }, { status: 400 });
+    }
 
-    // Insert audit record with pending status
-    const { data, error: insertError } = await supabase
-      .from("seo_audits")
-      .insert({
-        user_id: user.id,
-        url,
-        domain: domain ?? new URL(url).hostname,
-        status: "pending",
-        score: null,
-        results: null,
-      })
-      .select()
-      .single();
+    // Validate URL format
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url.startsWith("http") ? url : `https://${url}`);
+    } catch {
+      return NextResponse.json({ error: "Invalid URL format" }, { status: 400 });
+    }
 
-    if (insertError) throw insertError;
+    const cleanUrl = parsedUrl.href;
 
-    // Log activity
-    await supabase.from("activity_logs").insert({
-      user_id: user.id,
-      type: "seo_audit",
-      description: `SEO Audit started for ${url}`,
-      metadata: { audit_id: data.id },
-    });
+    // Fetch page content for analysis
+    let pageContent = "";
+    try {
+      const pageRes = await fetch(cleanUrl, {
+        headers: { "User-Agent": "BusinessOS-SEOBot/1.0" },
+        signal: AbortSignal.timeout(10000),
+      });
+      pageContent = await pageRes.text();
+      // Truncate to avoid huge payloads
+      pageContent = pageContent.slice(0, 8000);
+    } catch {
+      pageContent = `Could not fetch page content from ${cleanUrl}`;
+    }
 
-    return NextResponse.json({ audit: data }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    // AI-powered SEO analysis
+    const aiResult = await callOpenRouter(
+      [
+        {
+          role: "user",
+          content: `Perform a comprehensive SEO audit for: ${cleanUrl}
+
+Page HTML snippet (first 8000 chars):
+${pageContent}
+
+Return a JSON object ONLY (no markdown, no explanation) with this exact structure:
+{
+  "score": <number 0-100>,
+  "grade": "<A/B/C/D/F>",
+  "summary": "<2-3 sentence overview>",
+  "issues": [
+    {
+      "category": "<Technical|Content|Performance|Mobile|Security>",
+      "severity": "<critical|warning|info>",
+      "title": "<issue title>",
+      "description": "<what's wrong>",
+      "fix": "<how to fix>"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "<high|medium|low>",
+      "title": "<recommendation>",
+      "impact": "<expected impact>",
+      "effort": "<easy|medium|hard>"
+    }
+  ],
+  "metrics": {
+    "title_tag": "<present|missing|too_long|too_short>",
+    "meta_description": "<present|missing|too_long|too_short>",
+    "h1_count": <number>,
+    "images_without_alt": <number>,
+    "has_canonical": <boolean>,
+    "has_schema": <boolean>,
+    "has_robots_txt": <boolean>,
+    "has_sitemap": <boolean>
+  }
+}`,
+        },
+      ],
+      {
+        system: "You are an expert SEO auditor. Always respond with valid JSON only, no markdown code blocks.",
+        temperature: 0.3,
+        max_tokens: 2000,
+      }
+    );
+
+    let auditData;
+    try {
+      const cleaned = aiResult.content.replace(/```json|```/g, "").trim();
+      auditData = JSON.parse(cleaned);
+    } catch {
+      // Fallback structure if JSON parse fails
+      auditData = {
+        score: 50,
+        grade: "C",
+        summary: aiResult.content.slice(0, 200),
+        issues: [],
+        recommendations: [],
+        metrics: {},
+      };
+    }
+
+    // Save to Supabase if user is authenticated
+    try {
+      const supabase = createClient();
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("seo_audits").insert({
+            user_id: user.id,
+            url: cleanUrl,
+            score: auditData.score,
+            issues: auditData.issues,
+            recommendations: auditData.recommendations,
+            metadata: { grade: auditData.grade, metrics: auditData.metrics, model: aiResult.model },
+          });
+        }
+      }
+    } catch (dbErr) {
+      console.error("Failed to save audit to DB:", dbErr);
+      // Don't fail the request over DB save error
+    }
+
+    return NextResponse.json(
+      { success: true, url: cleanUrl, audit: auditData, model: aiResult.model },
+      { headers: getRateLimitHeaders(rateLimit) }
+    );
+  } catch (error) {
+    console.error("SEO Audit error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Audit failed" },
+      { status: 500 }
+    );
   }
 }
-
-// DELETE: Remove audit by id
-export async function DELETE(req: NextRequest) {
-  try {
-    const supabase = createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
-    if (!id) return NextResponse.json({ error: "Audit ID required" }, { status: 400 });
-
-    const { error: deleteError } = await supabase
-      .from("seo_audits")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
-
-    if (deleteError) throw deleteError;
-
-    return NextResponse.json({ message: "Audit deleted" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-    }
